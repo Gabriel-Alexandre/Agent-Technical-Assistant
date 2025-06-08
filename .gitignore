@@ -1,2 +1,5 @@
 Scrapper/venv
 Scrapper/.env
+Scrapper/results
+Scrapper/live_data
+Scrapper/live_data_simplify
