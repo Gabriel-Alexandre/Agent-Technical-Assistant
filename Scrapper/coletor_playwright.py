@@ -21,7 +21,7 @@ class PlaywrightSofaScoreCollector:
     async def create_browser_context(self, playwright):
         """Cria contexto do navegador com configurações realistas"""
         browser = await playwright.chromium.launch(
-            headless=False,
+            headless=True,
             args=[
                 '--no-sandbox',
                 '--disable-blink-features=AutomationControlled',
