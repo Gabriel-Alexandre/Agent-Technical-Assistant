@@ -1,0 +1,11 @@
+# Arquivo de exemplo para configuração das variáveis de ambiente
+# Renomeie este arquivo para .env e adicione sua chave da OpenAI
+
+OPENAI_API_KEY=sua_chave_openai_aqui
+
+# Como obter sua chave:
+# 1. Acesse: https://platform.openai.com/api-keys
+# 2. Faça login na sua conta OpenAI
+# 3. Clique em "Create new secret key"
+# 4. Copie a chave e cole acima substituindo "sua_chave_openai_aqui"
+# 5. Renomeie este arquivo para .env (sem extensão .txt) 
