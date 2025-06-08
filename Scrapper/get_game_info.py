@@ -9,6 +9,7 @@ import sys
 from datetime import datetime
 from playwright.async_api import async_playwright
 from pathlib import Path
+from simplify_match_data import MatchDataSimplifier
 
 class SofaScoreLiveCollector:
     """Coletor de dados ao vivo do SofaScore para assistente técnico"""
@@ -18,6 +19,9 @@ class SofaScoreLiveCollector:
         self.website_url = "https://www.sofascore.com/"
         self.data_dir = Path("live_data")
         self.data_dir.mkdir(exist_ok=True)
+        self.simplified_data_dir = Path("live_data_simplify")
+        self.simplified_data_dir.mkdir(exist_ok=True)
+        self.simplifier = MatchDataSimplifier()
         
     async def create_browser_context(self, playwright):
         """Cria contexto do navegador com configurações realistas"""
@@ -181,6 +185,28 @@ class SofaScoreLiveCollector:
                 
                 print(f"💾 Dados salvos em: {filepath.absolute()}")
                 print(f"📊 Coletados {len([k for k, v in match_data.items() if v and k != 'metadata'])} tipos de dados")
+                
+                # Simplificar dados automaticamente
+                print("🔄 Simplificando dados automaticamente...")
+                simplified_data = self.simplifier.simplify_match_data(filepath)
+                
+                if simplified_data:
+                    # Salvar dados simplificados
+                    simplified_filename = f"simplified_match_{match_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+                    simplified_filepath = self.simplified_data_dir / simplified_filename
+                    
+                    with open(simplified_filepath, 'w', encoding='utf-8') as f:
+                        json.dump(simplified_data, f, indent=2, ensure_ascii=False)
+                    
+                    print(f"✅ Dados simplificados salvos em: {simplified_filepath.absolute()}")
+                    
+                    # Mostrar estatísticas de redução
+                    original_size = filepath.stat().st_size / 1024
+                    simplified_size = simplified_filepath.stat().st_size / 1024
+                    reduction = ((original_size - simplified_size) / original_size) * 100
+                    print(f"📉 Redução de tamanho: {original_size:.1f} KB → {simplified_size:.1f} KB ({reduction:.1f}%)")
+                else:
+                    print("⚠️ Falha na simplificação automática")
                 
                 return match_data
                 
