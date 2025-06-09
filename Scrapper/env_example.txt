@@ -2,6 +2,9 @@
 # Renomeie este arquivo para .env e adicione sua chave da OpenAI
 
 OPENAI_API_KEY=sua_chave_openai_aqui
+SUPABASE_ANON_KEY=sua_chave_supabase_anon_key_aqui
+SUPABASE_SERVICE_ROLE_KEY=sua_chave_supabase_service_role_key_aqui
+SUPABASE_URL=sua_url_supabase_aqui
 
 # Como obter sua chave:
 # 1. Acesse: https://platform.openai.com/api-keys

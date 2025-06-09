@@ -3,3 +3,4 @@ Scrapper/.env
 Scrapper/results
 Scrapper/live_data
 Scrapper/live_data_simplify
+__pycache__/
