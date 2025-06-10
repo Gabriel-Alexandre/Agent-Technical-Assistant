@@ -190,330 +190,112 @@ class SofaScoreLiveCollectorAPI(SofaScoreLiveCollector):
     
     async def create_browser_context(self, playwright):
         """Cria contexto do navegador com configurações otimizadas para Docker"""
-        try:
-            print("🚀 Iniciando browser Chromium...")
-            browser = await playwright.chromium.launch(
-                headless=True,
-                args=[
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--disable-gpu',
-                    '--disable-extensions',
-                    '--disable-background-timer-throttling',
-                    '--disable-backgrounding-occluded-windows',
-                    '--disable-renderer-backgrounding',
-                    '--disable-features=TranslateUI',
-                    '--disable-ipc-flooding-protection',
-                    '--disable-blink-features=AutomationControlled',
-                    '--disable-web-security',
-                    '--disable-features=VizDisplayCompositor',
-                    '--disable-default-apps',
-                    '--disable-sync',
-                    '--disable-translate',
-                    '--hide-scrollbars',
-                    '--mute-audio',
-                    '--disable-background-networking',
-                    '--disable-automation',
-                    '--exclude-switches=enable-automation',
-                    '--disable-features=VizDisplayCompositor',
-                    '--disable-dev-tools',
-                    '--no-first-run',
-                    '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                ]
-            )
-            print("✅ Browser Chromium iniciado com sucesso!")
-            
-            print("🌐 Criando contexto do browser...")
-            context = await browser.new_context(
-                viewport={'width': 1920, 'height': 1080},
-                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                locale='pt-BR',
-                timezone_id='America/Sao_Paulo',
-                extra_http_headers={
-                    'Accept': '*/*',
-                    'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-                    'Accept-Encoding': 'gzip, deflate, br, zstd',
-                    'DNT': '1',
-                    'Connection': 'keep-alive',
-                    'Upgrade-Insecure-Requests': '1',
-                    'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-                    'Sec-Ch-Ua-Mobile': '?0',
-                    'Sec-Ch-Ua-Platform': '"Windows"',
-                    'Sec-Fetch-Dest': 'document',
-                    'Sec-Fetch-Mode': 'navigate',
-                    'Sec-Fetch-Site': 'none',
-                    'Sec-Fetch-User': '?1'
-                }
-            )
-            print("✅ Contexto do browser criado com sucesso!")
-            
-            return browser, context
-            
-        except Exception as e:
-            print(f"❌ Erro ao criar browser/contexto: {type(e).__name__}: {e}")
-            import traceback
-            print(f"🔍 Stack trace: {traceback.format_exc()}")
-            raise e
+        browser = await playwright.chromium.launch(
+            headless=True,
+            args=[
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-gpu',
+                '--disable-extensions',
+                '--disable-background-timer-throttling',
+                '--disable-backgrounding-occluded-windows',
+                '--disable-renderer-backgrounding',
+                '--disable-features=TranslateUI',
+                '--disable-ipc-flooding-protection',
+                '--disable-blink-features=AutomationControlled',
+                '--disable-web-security',
+                '--disable-features=VizDisplayCompositor',
+                '--single-process',
+                '--no-zygote',
+                '--disable-default-apps',
+                '--disable-sync',
+                '--disable-translate',
+                '--hide-scrollbars',
+                '--mute-audio',
+                '--disable-background-networking',
+                '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            ]
+        )
+        
+        context = await browser.new_context(
+            viewport={'width': 1920, 'height': 1080},
+            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            locale='pt-BR',
+            timezone_id='America/Sao_Paulo',
+            extra_http_headers={
+                'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'DNT': '1',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1'
+            }
+        )
+        
+        return browser, context
 
     async def fetch_api_data(self, page, endpoint):
         """Função auxiliar para buscar dados de uma API endpoint com tratamento melhorado"""
         try:
-            # Verificar se a página ainda está válida
-            if page.is_closed():
-                print(f"⚠️ Página está fechada, não é possível acessar: {endpoint}")
-                return None
-                
-            print(f"🔗 Acessando endpoint: {endpoint}")
-            
-            # Adicionar headers ainda mais convincentes para evitar detecção de bot
-            try:
-                await page.set_extra_http_headers({
-                    'Accept': 'application/json, text/plain, */*',
-                    'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-                    'Accept-Encoding': 'gzip, deflate, br, zstd',
-                    'Cache-Control': 'no-cache',
-                    'Pragma': 'no-cache',
-                    'Sec-Fetch-Dest': 'empty',
-                    'Sec-Fetch-Mode': 'cors',
-                    'Sec-Fetch-Site': 'same-origin',
-                    'Referer': 'https://www.sofascore.com/',
-                    'Origin': 'https://www.sofascore.com',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'Connection': 'keep-alive',
-                    'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-                    'Sec-Ch-Ua-Mobile': '?0',
-                    'Sec-Ch-Ua-Platform': '"Windows"'
-                })
-            except Exception as header_error:
-                print(f"⚠️ Erro ao definir headers: {header_error}")
-                return None
-            
-            # Configurar timeout maior e retry com delays maiores
+            # Configurar timeout maior e retry
             max_retries = 3
             for attempt in range(max_retries):
                 try:
-                    # Verificar novamente se a página ainda está válida antes de cada tentativa
-                    if page.is_closed():
-                        print(f"⚠️ Página foi fechada durante a tentativa {attempt + 1}")
-                        return None
-                        
-                    print(f"🚀 Tentativa {attempt + 1}/{max_retries} para: {endpoint}")
-                    
-                    # Adicionar delay maior para parecer mais humano (especialmente importante no Docker)
-                    if attempt > 0:
-                        delay = 8 + (attempt * 3)  # 8s, 11s, 14s
-                        print(f"⏳ Aguardando {delay}s antes da próxima tentativa...")
-                        await asyncio.sleep(delay)
-                    else:
-                        # Delay inicial para estabelecer padrão humano
-                        await asyncio.sleep(3)
-                    
                     response = await page.goto(
                         endpoint, 
-                        wait_until='domcontentloaded',
-                        timeout=40000  # Timeout maior
+                        wait_until='domcontentloaded',  # Mais rápido que networkidle para Docker
+                        timeout=30000
                     )
                     
-                    print(f"📡 Resposta recebida - Status: {response.status}")
-                    
                     if response.status == 200:
-                        print("✅ Status 200 - obtendo conteúdo...")
                         content = await page.content()
-                        print(f"📄 Tamanho do conteúdo: {len(content)} caracteres")
-                        
                         json_start = content.find('{')
                         json_end = content.rfind('}') + 1
                         
                         if json_start != -1 and json_end > json_start:
                             json_content = content[json_start:json_end]
-                            print(f"🔍 JSON extraído - tamanho: {len(json_content)} caracteres")
-                            try:
-                                data = json.loads(json_content)
-                                print(f"✅ JSON parseado com sucesso - chaves: {list(data.keys()) if isinstance(data, dict) else 'não é dict'}")
-                                return data
-                            except json.JSONDecodeError as je:
-                                print(f"❌ Erro ao fazer parse do JSON: {je}")
-                                print(f"🔍 Primeira parte do conteúdo: {json_content[:200]}...")
-                        else:
-                            print("❌ Não foi possível encontrar JSON válido no conteúdo")
-                            print(f"🔍 Primeira parte do conteúdo HTML: {content[:500]}...")
-                    elif response.status == 403:
-                        print(f"🚫 Status 403 (Forbidden) - SofaScore detectou automação")
-                        print(f"🔍 Headers da resposta: {response.headers}")
-                        # Para 403, aguardar ainda mais tempo antes da próxima tentativa
-                        if attempt < max_retries - 1:
-                            delay = 15 + (attempt * 5)  # 15s, 20s, 25s
-                            print(f"⏳ Aguardando {delay}s devido ao bloqueio 403...")
-                            await asyncio.sleep(delay)
-                    else:
-                        print(f"❌ Status HTTP não é 200: {response.status}")
-                        print(f"🔍 Headers da resposta: {response.headers}")
+                            return json.loads(json_content)
                     
                     if attempt < max_retries - 1:
-                        print(f"⚠️ Tentativa {attempt + 1} falhou (Status: {response.status}), tentando novamente...")
+                        print(f"⚠️ Tentativa {attempt + 1} falhou, tentando novamente...")
+                        await asyncio.sleep(2)  # Aguardar antes de tentar novamente
                     
                 except Exception as e:
-                    print(f"❌ Exceção na tentativa {attempt + 1}: {type(e).__name__}: {e}")
-                    
-                    # Se for um erro de página fechada, não vale a pena tentar novamente
-                    if "closed" in str(e).lower() or "target" in str(e).lower():
-                        print(f"💥 Página/contexto foi fechado, abortando: {endpoint}")
-                        return None
-                        
                     if attempt < max_retries - 1:
                         print(f"⚠️ Erro na tentativa {attempt + 1}: {e}, tentando novamente...")
-                        await asyncio.sleep(5)
+                        await asyncio.sleep(2)
                     else:
-                        print(f"💥 Todas as tentativas falharam para: {endpoint}")
                         raise e
             
-            print(f"❌ Todas as tentativas esgotadas para: {endpoint}")
             return None
         except Exception as e:
-            print(f"⚠️ Erro crítico ao buscar {endpoint}: {type(e).__name__}: {e}")
-            import traceback
-            print(f"🔍 Stack trace: {traceback.format_exc()}")
+            print(f"⚠️ Erro ao buscar {endpoint}: {e}")
             return None
     
     async def get_live_match_data_api(self, match_id: str) -> Optional[Dict[str, Any]]:
         """Versão adaptada para API que retorna apenas os dados sem salvar arquivos"""
         try:
             from playwright.async_api import async_playwright
-            print("✅ Playwright importado com sucesso!")
         except ImportError as e:
             print(f"❌ Playwright não está instalado: {e}")
             return None
         
-        # Verificar e exibir informações do event loop e sistema
+        # Verificar e exibir informações do event loop
         import platform
-        import os
         loop = asyncio.get_running_loop()
         print(f"🔧 Sistema: {platform.system()}")
-        print(f"🔧 Arquitetura: {platform.machine()}")
-        print(f"🔧 Python: {platform.python_version()}")
         print(f"🔧 Event Loop: {type(loop).__name__}")
         print(f"🔧 Event Loop Policy: {type(asyncio.get_event_loop_policy()).__name__}")
-        print(f"🔧 PLAYWRIGHT_BROWSERS_PATH: {os.getenv('PLAYWRIGHT_BROWSERS_PATH', 'Não definido')}")
-        print(f"🔧 USER: {os.getenv('USER', 'Não definido')}")
-        
-        # Verificar se o Chromium está disponível
-        try:
-            import subprocess
-            result = subprocess.run(['which', 'chromium'], capture_output=True, text=True, timeout=5)
-            if result.returncode == 0:
-                print(f"✅ Chromium encontrado em: {result.stdout.strip()}")
-            else:
-                print("⚠️ Chromium não encontrado no PATH")
-        except Exception as e:
-            print(f"⚠️ Erro ao verificar Chromium: {e}")
-        
-        match_data = {}
         
         try:
-            print("🎭 Iniciando Playwright...")
             async with async_playwright() as playwright:
-                print("🎭 Playwright iniciado com sucesso!")
-                print("🔍 Verificando navegadores disponíveis...")
-                print(f"🌐 Chromium disponível: {playwright.chromium}")
-                
-                browser = None
-                context = None
-                page = None
+                browser, context = await self.create_browser_context(playwright)
+                page = await context.new_page()
                 
                 try:
-                    print("🎭 Criando browser e contexto...")
-                    browser, context = await self.create_browser_context(playwright)
-                    print("📄 Criando nova página...")
-                    page = await context.new_page()
-                    
-                    # Mascarar propriedades de automação para evitar detecção
-                    await page.add_init_script("""
-                        Object.defineProperty(navigator, 'webdriver', {
-                            get: () => undefined,
-                        });
-                        
-                        Object.defineProperty(navigator, 'plugins', {
-                            get: () => [1, 2, 3, 4, 5],
-                        });
-                        
-                        Object.defineProperty(navigator, 'languages', {
-                            get: () => ['pt-BR', 'pt', 'en-US', 'en'],
-                        });
-                        
-                        window.chrome = {
-                            runtime: {},
-                        };
-                        
-                        Object.defineProperty(navigator, 'permissions', {
-                            get: () => ({
-                                query: () => Promise.resolve({ state: 'granted' }),
-                            }),
-                        });
-                    """)
-                    print("✅ Página criada e configurada com sucesso!")
-                    
                     print(f"🔄 Coletando dados da partida {match_id}...")
-                    print(f"🌐 Base URL configurada: {self.base_url}")
                     
-                    # Primeiro, visitar o site principal para estabelecer sessão legítima
-                    print("🏠 Visitando página principal do SofaScore para estabelecer sessão...")
-                    try:
-                        main_response = await page.goto(
-                            'https://www.sofascore.com/', 
-                            wait_until='domcontentloaded',
-                            timeout=15000
-                        )
-                        print(f"✅ Página principal acessada - Status: {main_response.status}")
-                        
-                        # Aguardar mais tempo para simular navegação humana
-                        await asyncio.sleep(5)
-                        
-                        # Simular scroll e movimento do mouse
-                        await page.mouse.move(100, 100)
-                        await page.evaluate("window.scrollTo(0, 100)")
-                        await asyncio.sleep(2)
-                        
-                        # Navegar para seção de futebol primeiro
-                        try:
-                            football_url = "https://www.sofascore.com/football"
-                            print(f"⚽ Visitando seção de futebol: {football_url}")
-                            football_response = await page.goto(
-                                football_url,
-                                wait_until='domcontentloaded',
-                                timeout=15000
-                            )
-                            print(f"✅ Seção de futebol acessada - Status: {football_response.status}")
-                            await asyncio.sleep(4)
-                            
-                            # Simular mais interação humana
-                            await page.mouse.move(200, 200)
-                            await page.evaluate("window.scrollTo(0, 200)")
-                            await asyncio.sleep(2)
-                            
-                        except Exception as football_error:
-                            print(f"⚠️ Erro ao acessar seção futebol: {football_error}")
-                        
-                        # Navegar para uma página de partida específica para simular interesse
-                        match_page_url = f"https://www.sofascore.com/match/{match_id}"
-                        print(f"⚽ Visitando página da partida: {match_page_url}")
-                        match_response = await page.goto(
-                            match_page_url,
-                            wait_until='domcontentloaded', 
-                            timeout=15000
-                        )
-                        print(f"✅ Página da partida acessada - Status: {match_response.status}")
-                        
-                        # Aguardar ainda mais tempo e simular interesse na página
-                        await asyncio.sleep(6)
-                        await page.mouse.move(300, 300)
-                        await page.evaluate("window.scrollTo(0, 300)")
-                        await asyncio.sleep(3)
-                        
-                    except Exception as session_error:
-                        print(f"⚠️ Erro ao estabelecer sessão: {session_error}")
-                        print("🔄 Continuando com coleta de dados mesmo assim...")
-                    
+                    match_data = {}
                     timestamp = datetime.now().isoformat()
                     
                     # 1. Informações básicas
@@ -572,27 +354,14 @@ class SofaScoreLiveCollectorAPI(SofaScoreLiveCollector):
                     }
                     
                     print(f"✅ Dados coletados: {len([k for k, v in match_data.items() if v and k != 'metadata'])} tipos")
+                    return match_data
                     
-                except Exception as collection_error:
-                    print(f"❌ Erro durante a coleta: {collection_error}")
+                except Exception as e:
+                    print(f"❌ Erro na coleta: {e}")
                     return None
                     
                 finally:
-                    # Fechar recursos de forma segura
-                    try:
-                        if page and not page.is_closed():
-                            print("🔄 Fechando página...")
-                            await page.close()
-                        if context:
-                            print("🔄 Fechando contexto...")
-                            await context.close()
-                        if browser:
-                            print("🔄 Fechando browser...")
-                            await browser.close()
-                    except Exception as cleanup_error:
-                        print(f"⚠️ Erro durante limpeza de recursos: {cleanup_error}")
-                
-                return match_data
+                    await browser.close()
         
         except Exception as e:
             print(f"❌ Erro crítico do Playwright: {e}")
