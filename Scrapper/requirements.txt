@@ -41,4 +41,4 @@ httpx==0.26.0
 pydantic==2.5.1
 
 # Type hints
-typing-extensions==4.8.0 
+typing-extensions==4.12.2 
