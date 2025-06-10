@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
     container_name: scrapper-api
     ports:
-      - "8002:8000"
+      - "8003:8000"
     env_file:
       - .env
     volumes:
