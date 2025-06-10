@@ -216,7 +216,10 @@ class SofaScoreLiveCollectorAPI(SofaScoreLiveCollector):
                     '--disable-background-networking',
                     '--disable-automation',
                     '--exclude-switches=enable-automation',
-                    '--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                    '--disable-features=VizDisplayCompositor',
+                    '--disable-dev-tools',
+                    '--no-first-run',
+                    '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
                 ]
             )
             print("✅ Browser Chromium iniciado com sucesso!")
@@ -224,18 +227,23 @@ class SofaScoreLiveCollectorAPI(SofaScoreLiveCollector):
             print("🌐 Criando contexto do browser...")
             context = await browser.new_context(
                 viewport={'width': 1920, 'height': 1080},
-                user_agent='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 locale='pt-BR',
                 timezone_id='America/Sao_Paulo',
                 extra_http_headers={
+                    'Accept': '*/*',
                     'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-                    'Accept-Encoding': 'gzip, deflate, br',
+                    'Accept-Encoding': 'gzip, deflate, br, zstd',
                     'DNT': '1',
                     'Connection': 'keep-alive',
                     'Upgrade-Insecure-Requests': '1',
                     'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
                     'Sec-Ch-Ua-Mobile': '?0',
-                    'Sec-Ch-Ua-Platform': '"Linux"'
+                    'Sec-Ch-Ua-Platform': '"Windows"',
+                    'Sec-Fetch-Dest': 'document',
+                    'Sec-Fetch-Mode': 'navigate',
+                    'Sec-Fetch-Site': 'none',
+                    'Sec-Fetch-User': '?1'
                 }
             )
             print("✅ Contexto do browser criado com sucesso!")
@@ -258,25 +266,30 @@ class SofaScoreLiveCollectorAPI(SofaScoreLiveCollector):
                 
             print(f"🔗 Acessando endpoint: {endpoint}")
             
-            # Adicionar headers mais convincentes para evitar detecção de bot
+            # Adicionar headers ainda mais convincentes para evitar detecção de bot
             try:
                 await page.set_extra_http_headers({
                     'Accept': 'application/json, text/plain, */*',
                     'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-                    'Accept-Encoding': 'gzip, deflate, br',
+                    'Accept-Encoding': 'gzip, deflate, br, zstd',
                     'Cache-Control': 'no-cache',
                     'Pragma': 'no-cache',
                     'Sec-Fetch-Dest': 'empty',
                     'Sec-Fetch-Mode': 'cors',
                     'Sec-Fetch-Site': 'same-origin',
                     'Referer': 'https://www.sofascore.com/',
-                    'Origin': 'https://www.sofascore.com'
+                    'Origin': 'https://www.sofascore.com',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Connection': 'keep-alive',
+                    'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+                    'Sec-Ch-Ua-Mobile': '?0',
+                    'Sec-Ch-Ua-Platform': '"Windows"'
                 })
             except Exception as header_error:
                 print(f"⚠️ Erro ao definir headers: {header_error}")
                 return None
             
-            # Configurar timeout maior e retry
+            # Configurar timeout maior e retry com delays maiores
             max_retries = 3
             for attempt in range(max_retries):
                 try:
@@ -287,14 +300,19 @@ class SofaScoreLiveCollectorAPI(SofaScoreLiveCollector):
                         
                     print(f"🚀 Tentativa {attempt + 1}/{max_retries} para: {endpoint}")
                     
-                    # Adicionar um pequeno delay para parecer mais humano
+                    # Adicionar delay maior para parecer mais humano (especialmente importante no Docker)
                     if attempt > 0:
-                        await asyncio.sleep(3 + attempt)  # Delay progressivo
+                        delay = 8 + (attempt * 3)  # 8s, 11s, 14s
+                        print(f"⏳ Aguardando {delay}s antes da próxima tentativa...")
+                        await asyncio.sleep(delay)
+                    else:
+                        # Delay inicial para estabelecer padrão humano
+                        await asyncio.sleep(3)
                     
                     response = await page.goto(
                         endpoint, 
                         wait_until='domcontentloaded',
-                        timeout=30000
+                        timeout=40000  # Timeout maior
                     )
                     
                     print(f"📡 Resposta recebida - Status: {response.status}")
@@ -320,13 +338,20 @@ class SofaScoreLiveCollectorAPI(SofaScoreLiveCollector):
                         else:
                             print("❌ Não foi possível encontrar JSON válido no conteúdo")
                             print(f"🔍 Primeira parte do conteúdo HTML: {content[:500]}...")
+                    elif response.status == 403:
+                        print(f"🚫 Status 403 (Forbidden) - SofaScore detectou automação")
+                        print(f"🔍 Headers da resposta: {response.headers}")
+                        # Para 403, aguardar ainda mais tempo antes da próxima tentativa
+                        if attempt < max_retries - 1:
+                            delay = 15 + (attempt * 5)  # 15s, 20s, 25s
+                            print(f"⏳ Aguardando {delay}s devido ao bloqueio 403...")
+                            await asyncio.sleep(delay)
                     else:
                         print(f"❌ Status HTTP não é 200: {response.status}")
                         print(f"🔍 Headers da resposta: {response.headers}")
                     
                     if attempt < max_retries - 1:
                         print(f"⚠️ Tentativa {attempt + 1} falhou (Status: {response.status}), tentando novamente...")
-                        await asyncio.sleep(2)  # Aguardar antes de tentar novamente
                     
                 except Exception as e:
                     print(f"❌ Exceção na tentativa {attempt + 1}: {type(e).__name__}: {e}")
@@ -338,7 +363,7 @@ class SofaScoreLiveCollectorAPI(SofaScoreLiveCollector):
                         
                     if attempt < max_retries - 1:
                         print(f"⚠️ Erro na tentativa {attempt + 1}: {e}, tentando novamente...")
-                        await asyncio.sleep(2)
+                        await asyncio.sleep(5)
                     else:
                         print(f"💥 Todas as tentativas falharam para: {endpoint}")
                         raise e
@@ -441,8 +466,33 @@ class SofaScoreLiveCollectorAPI(SofaScoreLiveCollector):
                         )
                         print(f"✅ Página principal acessada - Status: {main_response.status}")
                         
-                        # Aguardar um pouco para simular navegação humana
+                        # Aguardar mais tempo para simular navegação humana
+                        await asyncio.sleep(5)
+                        
+                        # Simular scroll e movimento do mouse
+                        await page.mouse.move(100, 100)
+                        await page.evaluate("window.scrollTo(0, 100)")
                         await asyncio.sleep(2)
+                        
+                        # Navegar para seção de futebol primeiro
+                        try:
+                            football_url = "https://www.sofascore.com/football"
+                            print(f"⚽ Visitando seção de futebol: {football_url}")
+                            football_response = await page.goto(
+                                football_url,
+                                wait_until='domcontentloaded',
+                                timeout=15000
+                            )
+                            print(f"✅ Seção de futebol acessada - Status: {football_response.status}")
+                            await asyncio.sleep(4)
+                            
+                            # Simular mais interação humana
+                            await page.mouse.move(200, 200)
+                            await page.evaluate("window.scrollTo(0, 200)")
+                            await asyncio.sleep(2)
+                            
+                        except Exception as football_error:
+                            print(f"⚠️ Erro ao acessar seção futebol: {football_error}")
                         
                         # Navegar para uma página de partida específica para simular interesse
                         match_page_url = f"https://www.sofascore.com/match/{match_id}"
@@ -454,7 +504,10 @@ class SofaScoreLiveCollectorAPI(SofaScoreLiveCollector):
                         )
                         print(f"✅ Página da partida acessada - Status: {match_response.status}")
                         
-                        # Aguardar mais um pouco
+                        # Aguardar ainda mais tempo e simular interesse na página
+                        await asyncio.sleep(6)
+                        await page.mouse.move(300, 300)
+                        await page.evaluate("window.scrollTo(0, 300)")
                         await asyncio.sleep(3)
                         
                     except Exception as session_error:
