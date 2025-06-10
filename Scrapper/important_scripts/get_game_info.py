@@ -9,7 +9,7 @@ import sys
 from datetime import datetime
 from playwright.async_api import async_playwright
 from pathlib import Path
-from simplify_match_data import MatchDataSimplifier
+from .simplify_match_data import MatchDataSimplifier
 
 # Importar assistente técnico para integração automática
 try:

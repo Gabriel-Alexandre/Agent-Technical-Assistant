@@ -1,5 +1,6 @@
 Scrapper/venv
 Scrapper/.env
+Scrapper/.env.local
 Scrapper/results
 Scrapper/live_data
 Scrapper/live_data_simplify

@@ -1,12 +1,43 @@
-LanusStats
-supabase>=2.7.0
-pandas>=2.0.0
-python-dotenv>=1.0.0
-requests>=2.31.0
-playwright>=1.40.0
-ipython>=8.0.0
-jupyter>=1.0.0
-beautifulsoup4>=4.12.0
-lxml>=4.9.0
-selenium>=4.0.0
-openai>=1.0.0 
+# API Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# Web Scraping
+playwright==1.40.0
+requests==2.31.0
+aiohttp==3.9.1
+
+# Database
+aiosqlite==0.19.0
+sqlalchemy==2.0.23
+
+# Async support
+asyncio-throttle==1.0.2
+
+# Data processing
+pandas==2.1.4
+numpy==1.25.2
+
+# Environment variables
+python-dotenv==1.0.0
+
+# OpenAI (para análise técnica)
+openai==1.3.7
+
+# JSON processing
+jsonschema==4.20.0
+
+# Logging
+structlog==23.2.0
+
+# Date/time
+python-dateutil==2.8.2
+
+# HTTP client
+httpx==0.25.2
+
+# Validation
+pydantic==2.5.1
+
+# Type hints
+typing-extensions==4.8.0 
