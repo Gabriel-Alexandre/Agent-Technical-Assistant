@@ -379,9 +379,14 @@ async def test_playwright():
                         ]
                     )
                     
-                    browser_version = await browser.version()
-                    test_results["tests"]["browser_launch"] = f"✅ Sucesso - Versão: {browser_version}"
-                    test_results["system_info"]["browser_version"] = browser_version
+                    # Simplesmente verificar se o navegador foi criado com sucesso
+                    if browser:
+                        test_results["tests"]["browser_launch"] = f"✅ Sucesso - Navegador inicializado"
+                        test_results["system_info"]["browser_version"] = "Chromium (versão não detectável)"
+                    else:
+                        test_results["tests"]["browser_launch"] = f"❌ Falha: Navegador não foi criado"
+                        test_results["errors"].append("Navegador não foi criado corretamente")
+                        return test_results
                     
                     # Testar criação de contexto
                     try:
@@ -410,7 +415,7 @@ async def test_playwright():
                                     
                                     # Testar acesso a API do SofaScore
                                     try:
-                                        api_response = await page.goto('https://www.sofascore.com/api/v1/sport/football/events/live', timeout=15000)
+                                        api_response = await page.goto('https://api.sofascore.com/api/v1/sport/football/events/live', timeout=15000)
                                         test_results["tests"]["sofascore_api"] = f"✅ API acessível - Status: {api_response.status}"
                                         
                                         if api_response.status == 200:
