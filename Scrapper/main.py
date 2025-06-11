@@ -323,7 +323,7 @@ async def get_match_history(match_id: str, limit: int = 10):
          - Inicializa o navegador Chromium
          - Acessa uma página simples (Google)
          - Verifica se consegue extrair o título da página
-         - Testa acesso ao SofaScore
+         - Testa acesso ao SofaScore com múltiplas estratégias
          - Retorna informações detalhadas do sistema
          
          **Útil para diagnosticar:**
@@ -366,7 +366,7 @@ async def test_playwright():
             async with async_playwright() as playwright:
                 test_results["tests"]["playwright_init"] = "✅ Sucesso"
                 
-                # Testar criação do navegador
+                # Testar criação do navegador com configurações mais robustas
                 try:
                     browser = await playwright.chromium.launch(
                         headless=True,
@@ -375,11 +375,23 @@ async def test_playwright():
                             '--disable-setuid-sandbox',
                             '--disable-dev-shm-usage',
                             '--disable-gpu',
-                            '--disable-extensions'
+                            '--disable-extensions',
+                            '--disable-blink-features=AutomationControlled',
+                            '--disable-web-security',
+                            '--disable-features=VizDisplayCompositor',
+                            '--disable-background-timer-throttling',
+                            '--disable-backgrounding-occluded-windows',
+                            '--disable-renderer-backgrounding',
+                            '--disable-field-trial-config',
+                            '--disable-ipc-flooding-protection',
+                            '--no-first-run',
+                            '--no-default-browser-check',
+                            '--no-pings',
+                            '--password-store=basic',
+                            '--use-mock-keychain'
                         ]
                     )
                     
-                    # Simplesmente verificar se o navegador foi criado com sucesso
                     if browser:
                         test_results["tests"]["browser_launch"] = f"✅ Sucesso - Navegador inicializado"
                         test_results["system_info"]["browser_version"] = "Chromium (versão não detectável)"
@@ -388,55 +400,202 @@ async def test_playwright():
                         test_results["errors"].append("Navegador não foi criado corretamente")
                         return test_results
                     
-                    # Testar criação de contexto
+                    # Testar criação de contexto com configurações otimizadas
                     try:
                         context = await browser.new_context(
                             viewport={'width': 1920, 'height': 1080},
-                            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                            extra_http_headers={
+                                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+                                'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
+                                'Accept-Encoding': 'gzip, deflate, br',
+                                'Cache-Control': 'no-cache',
+                                'Pragma': 'no-cache',
+                                'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+                                'Sec-Ch-Ua-Mobile': '?0',
+                                'Sec-Ch-Ua-Platform': '"Windows"',
+                                'Sec-Fetch-Dest': 'document',
+                                'Sec-Fetch-Mode': 'navigate',
+                                'Sec-Fetch-Site': 'none',
+                                'Sec-Fetch-User': '?1',
+                                'Upgrade-Insecure-Requests': '1'
+                            },
+                            ignore_https_errors=True,
+                            java_script_enabled=True
                         )
                         test_results["tests"]["context_creation"] = "✅ Sucesso"
                         
                         # Testar criação de página
                         try:
                             page = await context.new_page()
+                            
+                            # Configurar timeouts mais longos
+                            page.set_default_timeout(30000)  # 30 segundos
+                            page.set_default_navigation_timeout(30000)  # 30 segundos
+                            
+                            # Adicionar script para esconder automação
+                            await page.add_init_script("""
+                                Object.defineProperty(navigator, 'webdriver', {
+                                    get: () => undefined,
+                                });
+                                Object.defineProperty(navigator, 'plugins', {
+                                    get: () => [1, 2, 3, 4, 5],
+                                });
+                                Object.defineProperty(navigator, 'languages', {
+                                    get: () => ['pt-BR', 'pt', 'en'],
+                                });
+                                window.chrome = {
+                                    runtime: {}
+                                };
+                            """)
+                            
                             test_results["tests"]["page_creation"] = "✅ Sucesso"
                             
-                            # Testar acesso ao Google
-                            try:
-                                response = await page.goto('https://www.google.com', timeout=15000)
-                                google_title = await page.title()
-                                test_results["tests"]["google_access"] = f"✅ Sucesso - Status: {response.status}, Título: {google_title}"
-                                
-                                # Testar acesso ao SofaScore
+                            # Testar conectividade básica com sites simples
+                            connectivity_tests = [
+                                {"name": "Google", "url": "https://www.google.com"},
+                                {"name": "Example", "url": "https://example.com"},
+                                {"name": "Httpbin", "url": "https://httpbin.org/get"}
+                            ]
+                            
+                            working_sites = 0
+                            for test_site in connectivity_tests:
                                 try:
-                                    sofascore_response = await page.goto('https://www.sofascore.com', timeout=15000)
-                                    sofascore_title = await page.title()
-                                    test_results["tests"]["sofascore_access"] = f"✅ Sucesso - Status: {sofascore_response.status}, Título: {sofascore_title[:50]}..."
+                                    response = await page.goto(test_site["url"], 
+                                                              timeout=15000, 
+                                                              wait_until='domcontentloaded')
+                                    if response.status == 200:
+                                        working_sites += 1
+                                        test_results["tests"][f"{test_site['name'].lower()}_access"] = f"✅ {test_site['name']} - Status: {response.status}"
+                                    else:
+                                        test_results["tests"][f"{test_site['name'].lower()}_access"] = f"⚠️ {test_site['name']} - Status: {response.status}"
+                                except Exception as e:
+                                    test_results["tests"][f"{test_site['name'].lower()}_access"] = f"❌ {test_site['name']} - {str(e)[:50]}..."
+                            
+                            # Avaliar conectividade geral
+                            if working_sites >= 2:
+                                test_results["tests"]["network_connectivity"] = f"✅ Conectividade OK ({working_sites}/{len(connectivity_tests)} sites acessíveis)"
+                            elif working_sites >= 1:
+                                test_results["tests"]["network_connectivity"] = f"⚠️ Conectividade limitada ({working_sites}/{len(connectivity_tests)} sites acessíveis)"
+                            else:
+                                test_results["tests"]["network_connectivity"] = f"❌ Problemas de conectividade (0/{len(connectivity_tests)} sites acessíveis)"
+                                test_results["errors"].append("Problemas graves de conectividade de rede detectados")
+                            
+                            # Testar acesso ao SofaScore com múltiplas estratégias (independente da conectividade geral)
+                            sofascore_strategies = [
+                                {
+                                    "name": "Estratégia 1: Carregamento rápido",
+                                    "url": "https://www.sofascore.com",
+                                    "timeout": 30000,
+                                    "wait_until": "domcontentloaded"
+                                },
+                                {
+                                    "name": "Estratégia 2: Aguardar rede",
+                                    "url": "https://www.sofascore.com",
+                                    "timeout": 45000,
+                                    "wait_until": "networkidle"
+                                },
+                                {
+                                    "name": "Estratégia 3: Acesso direto à API",
+                                    "url": "https://api.sofascore.com/api/v1/sport/football/events/live",
+                                    "timeout": 20000,
+                                    "wait_until": "domcontentloaded"
+                                }
+                            ]
+                            
+                            sofascore_success = False
+                            
+                            for i, strategy in enumerate(sofascore_strategies):
+                                print(f"🔄 Testando {strategy['name']}...")
+                                strategy_start_time = datetime.now()
+                                
+                                try:
+                                    # Simular delay humano antes de cada tentativa
+                                    await page.wait_for_timeout(2000)
                                     
-                                    # Testar acesso a API do SofaScore
-                                    try:
-                                        api_response = await page.goto('https://api.sofascore.com/api/v1/sport/football/events/live', timeout=15000)
-                                        test_results["tests"]["sofascore_api"] = f"✅ API acessível - Status: {api_response.status}"
-                                        
-                                        if api_response.status == 200:
+                                    # Limpar cookies e cache antes de nova tentativa
+                                    if i > 0:
+                                        await context.clear_cookies()
+                                    
+                                    sofascore_response = await page.goto(
+                                        strategy["url"], 
+                                        timeout=strategy["timeout"],
+                                        wait_until=strategy["wait_until"]
+                                    )
+                                    
+                                    strategy_duration = (datetime.now() - strategy_start_time).total_seconds()
+                                    
+                                    if sofascore_response.status == 200:
+                                        if "api.sofascore.com" in strategy["url"]:
+                                            # Para API, verificar se retornou JSON
                                             content = await page.content()
                                             if '{' in content and '}' in content:
-                                                test_results["tests"]["sofascore_api_json"] = "✅ JSON detectado na resposta"
+                                                test_results["tests"][f"strategy_{i+1}_result"] = f"✅ {strategy['name']} - API funcionando ({strategy_duration:.1f}s)"
+                                                if not sofascore_success:
+                                                    test_results["tests"]["sofascore_api_access"] = f"✅ {strategy['name']} - API funcionando"
+                                                    sofascore_success = True
                                             else:
-                                                test_results["tests"]["sofascore_api_json"] = "⚠️ JSON não detectado"
-                                        
-                                    except Exception as e:
-                                        test_results["tests"]["sofascore_api"] = f"❌ Falha: {str(e)}"
-                                        test_results["errors"].append(f"Erro API SofaScore: {str(e)}")
-                                    
-                                except Exception as e:
-                                    test_results["tests"]["sofascore_access"] = f"❌ Falha: {str(e)}"
-                                    test_results["errors"].append(f"Erro acesso SofaScore: {str(e)}")
+                                                test_results["tests"][f"strategy_{i+1}_result"] = f"⚠️ {strategy['name']} - Status 200, mas sem JSON na resposta ({strategy_duration:.1f}s)"
+                                        else:
+                                            # Para site principal, verificar título
+                                            try:
+                                                await page.wait_for_timeout(3000)  # Aguardar carregamento
+                                                sofascore_title = await page.title()
+                                                if sofascore_title and len(sofascore_title) > 0:
+                                                    test_results["tests"][f"strategy_{i+1}_result"] = f"✅ {strategy['name']} - Status: {sofascore_response.status}, Título: {sofascore_title[:30]}... ({strategy_duration:.1f}s)"
+                                                    if not sofascore_success:
+                                                        test_results["tests"]["sofascore_website_access"] = f"✅ {strategy['name']} - Status: {sofascore_response.status}, Título: {sofascore_title[:50]}..."
+                                                        sofascore_success = True
+                                                else:
+                                                    test_results["tests"][f"strategy_{i+1}_result"] = f"⚠️ {strategy['name']} - Status 200, mas título vazio ({strategy_duration:.1f}s)"
+                                            except Exception as title_e:
+                                                test_results["tests"][f"strategy_{i+1}_result"] = f"⚠️ {strategy['name']} - Status 200, erro no título: {str(title_e)[:30]}... ({strategy_duration:.1f}s)"
+                                    else:
+                                        test_results["tests"][f"strategy_{i+1}_result"] = f"❌ {strategy['name']} - Status: {sofascore_response.status} ({strategy_duration:.1f}s)"
                                 
-                            except Exception as e:
-                                test_results["tests"]["google_access"] = f"❌ Falha: {str(e)}"
-                                test_results["errors"].append(f"Erro acesso Google: {str(e)}")
+                                except Exception as e:
+                                    strategy_duration = (datetime.now() - strategy_start_time).total_seconds()
+                                    error_msg = str(e)
+                                    if "Timeout" in error_msg:
+                                        test_results["tests"][f"strategy_{i+1}_result"] = f"⏱️ {strategy['name']} - Timeout após {strategy_duration:.1f}s (limite: {strategy['timeout']/1000}s)"
+                                    elif "net::ERR_" in error_msg:
+                                        test_results["tests"][f"strategy_{i+1}_result"] = f"🌐 {strategy['name']} - Erro de rede: {error_msg.split('net::')[1][:20]}... ({strategy_duration:.1f}s)"
+                                    else:
+                                        test_results["tests"][f"strategy_{i+1}_result"] = f"❌ {strategy['name']} - {error_msg[:40]}... ({strategy_duration:.1f}s)"
                             
+                            # Resultado final do SofaScore
+                            if sofascore_success:
+                                test_results["tests"]["sofascore_final_result"] = "✅ SofaScore acessível com pelo menos uma estratégia"
+                            else:
+                                test_results["tests"]["sofascore_final_result"] = "❌ SofaScore inacessível com todas as estratégias"
+                                test_results["errors"].append("SofaScore não pôde ser acessado com nenhuma das estratégias testadas")
+                            
+                            # Resumo das estratégias testadas
+                            strategy_summary = []
+                            successful_strategies = 0
+                            failed_strategies = 0
+                            
+                            for i in range(len(sofascore_strategies)):
+                                strategy_key = f"strategy_{i+1}_result"
+                                if strategy_key in test_results["tests"]:
+                                    result = test_results["tests"][strategy_key]
+                                    if result.startswith("✅"):
+                                        successful_strategies += 1
+                                        strategy_summary.append(f"✅ Estratégia {i+1}")
+                                    elif result.startswith("⚠️"):
+                                        strategy_summary.append(f"⚠️ Estratégia {i+1}")
+                                    elif result.startswith("⏱️"):
+                                        failed_strategies += 1
+                                        strategy_summary.append(f"⏱️ Estratégia {i+1}")
+                                    elif result.startswith("🌐"):
+                                        failed_strategies += 1
+                                        strategy_summary.append(f"🌐 Estratégia {i+1}")
+                                    else:
+                                        failed_strategies += 1
+                                        strategy_summary.append(f"❌ Estratégia {i+1}")
+                            
+                            test_results["tests"]["strategies_summary"] = f"📊 Resumo: {successful_strategies} sucessos, {failed_strategies} falhas de {len(sofascore_strategies)} estratégias - [{', '.join(strategy_summary)}]"
+                                
                         except Exception as e:
                             test_results["tests"]["page_creation"] = f"❌ Falha: {str(e)}"
                             test_results["errors"].append(f"Erro criação página: {str(e)}")
@@ -457,14 +616,20 @@ async def test_playwright():
             test_results["tests"]["playwright_init"] = f"❌ Falha: {str(e)}"
             test_results["errors"].append(f"Erro inicialização Playwright: {str(e)}")
         
-        # Determinar sucesso geral
+        # Determinar sucesso geral - considerar sucesso se pelo menos funcionalidades básicas funcionaram
         failed_tests = [test for test, result in test_results["tests"].items() if result.startswith("❌")]
-        test_results["success"] = len(failed_tests) == 0
+        critical_tests = ["playwright_import", "playwright_init", "browser_launch", "context_creation", "page_creation", "network_connectivity"]
+        critical_failures = [test for test in failed_tests if test in critical_tests]
+        
+        # Sucesso se funções críticas funcionaram, mesmo que SofaScore tenha problemas
+        test_results["success"] = len(critical_failures) == 0
         test_results["summary"] = {
             "total_tests": len(test_results["tests"]),
             "passed": len(test_results["tests"]) - len(failed_tests),
             "failed": len(failed_tests),
-            "failed_tests": failed_tests
+            "critical_failures": len(critical_failures),
+            "failed_tests": failed_tests,
+            "note": "Sucesso = funções críticas do Playwright funcionando, mesmo com problemas no SofaScore"
         }
         
         return test_results

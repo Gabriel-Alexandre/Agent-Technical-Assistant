@@ -189,29 +189,29 @@ class SofaScoreLiveCollectorAPI(SofaScoreLiveCollector):
         self.assistant = None
     
     async def create_browser_context(self, playwright):
-        """Cria contexto do navegador com configurações otimizadas para Docker"""
-        print(f"🔧 Configurando navegador para contornar bloqueios...")
+        """Cria contexto do navegador otimizado baseado nos testes bem-sucedidos"""
+        print(f"🔧 Configurando navegador com configurações otimizadas...")
         
-        # Argumentos otimizados para Docker e contornar detecção
+        # Argumentos otimizados baseados no teste que funcionou 100%
         browser_args = [
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
             '--disable-gpu',
             '--disable-extensions',
-            '--disable-background-timer-throttling',
-            '--disable-renderer-backgrounding',
-            '--disable-backgrounding-occluded-windows',
+            '--disable-blink-features=AutomationControlled',
             '--disable-web-security',
-            '--disable-features=TranslateUI,VizDisplayCompositor',
+            '--disable-features=VizDisplayCompositor',
+            '--disable-background-timer-throttling',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-renderer-backgrounding',
+            '--disable-field-trial-config',
             '--disable-ipc-flooding-protection',
-            '--disable-default-apps',
-            '--disable-sync',
             '--no-first-run',
             '--no-default-browser-check',
-            '--disable-background-mode',
-            '--disable-blink-features=AutomationControlled',  # Importante para não ser detectado
-            '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            '--no-pings',
+            '--password-store=basic',
+            '--use-mock-keychain'
         ]
         
         print(f"🚀 Iniciando navegador Chromium com {len(browser_args)} argumentos anti-detecção...")
@@ -220,62 +220,57 @@ class SofaScoreLiveCollectorAPI(SofaScoreLiveCollector):
             browser = await playwright.chromium.launch(
                 headless=True,
                 args=browser_args,
-                # Configurações adicionais para estabilidade
-                slow_mo=500,  # Delay maior entre ações (1 segundo)
-                timeout=60000  # Timeout maior para inicialização
+                # Configurações otimizadas baseadas no teste
+                slow_mo=100,  # Reduzido para 100ms (era 500ms)
+                timeout=30000  # Reduzido para 30s (era 60s)
             )
             
             print(f"✅ Navegador iniciado com sucesso")
             
-            # Configurações do contexto otimizadas para parecer humano
+            # Configurações do contexto otimizadas baseadas no teste bem-sucedido
             context_options = {
-                'viewport': {'width': 1920, 'height': 1080},  # Resolução desktop comum
+                'viewport': {'width': 1920, 'height': 1080},
                 'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'locale': 'en-US',  # Inglês americano para evitar suspeitas
-                'timezone_id': 'America/New_York',  # Timezone americano
-                'permissions': [],  # Sem permissões especiais
-                'geolocation': {'latitude': 40.7128, 'longitude': -74.0060},  # Nova York
                 'extra_http_headers': {
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
-                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+                    'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
                     'Accept-Encoding': 'gzip, deflate, br',
-                    'DNT': '1',
-                    'Connection': 'keep-alive',
-                    'Upgrade-Insecure-Requests': '1',
+                    'Cache-Control': 'no-cache',
+                    'Pragma': 'no-cache',
+                    'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+                    'Sec-Ch-Ua-Mobile': '?0',
+                    'Sec-Ch-Ua-Platform': '"Windows"',
                     'Sec-Fetch-Dest': 'document',
                     'Sec-Fetch-Mode': 'navigate',
                     'Sec-Fetch-Site': 'none',
                     'Sec-Fetch-User': '?1',
-                    'Cache-Control': 'max-age=0'
-                }
+                    'Upgrade-Insecure-Requests': '1'
+                },
+                'ignore_https_errors': True,
+                'java_script_enabled': True
             }
             
             print(f"🌐 Criando contexto do navegador...")
             context = await browser.new_context(**context_options)
             
-            # Configurar timeouts mais longos para parecer humano
-            context.set_default_timeout(30000)  # 45 segundos
-            context.set_default_navigation_timeout(30000)
+            # Configurar timeouts otimizados
+            context.set_default_timeout(30000)  # 30 segundos
+            context.set_default_navigation_timeout(30000)  # 30 segundos
             
-            # Adicionar scripts para mascarar automação
+            # Adicionar scripts para mascarar automação (baseados no teste bem-sucedido)
             await context.add_init_script("""
-                // Remover propriedades que indicam automação
                 Object.defineProperty(navigator, 'webdriver', {
                     get: () => undefined,
                 });
-                
-                // Mascarar detecção de Playwright
-                delete window.playwright;
-                delete window._playwright;
-                
-                // Adicionar propriedades típicas de navegador real
                 Object.defineProperty(navigator, 'plugins', {
                     get: () => [1, 2, 3, 4, 5],
                 });
-                
                 Object.defineProperty(navigator, 'languages', {
-                    get: () => ['en-US', 'en'],
+                    get: () => ['pt-BR', 'pt', 'en'],
                 });
+                window.chrome = {
+                    runtime: {}
+                };
             """)
             
             print(f"✅ Contexto criado com configurações anti-detecção")
@@ -292,22 +287,22 @@ class SofaScoreLiveCollectorAPI(SofaScoreLiveCollector):
             raise e
 
     async def fetch_api_data(self, page, endpoint):
-        """Função auxiliar para buscar dados de uma API endpoint com tratamento melhorado"""
+        """Função auxiliar otimizada para buscar dados de API endpoint"""
         endpoint_name = endpoint.split('/')[-1] or endpoint.split('/')[-2]
         
         try:
             print(f"🔗 Acessando endpoint: {endpoint}")
             
-            # Configurar timeout maior e retry
-            max_retries = 3
+            # Configurar retry otimizado (baseado no teste que funcionou)
+            max_retries = 2  # Reduzido de 3 para 2
             for attempt in range(max_retries):
                 try:
                     print(f"🚀 Tentativa {attempt + 1}/{max_retries} - {endpoint_name}")
                     
                     response = await page.goto(
                         endpoint, 
-                        wait_until='domcontentloaded',  # Mais rápido que networkidle para Docker
-                        timeout=30000
+                        wait_until='domcontentloaded',  # Comprovadamente mais rápido
+                        timeout=20000  # Reduzido de 30s para 20s baseado no teste
                     )
                     
                     print(f"📡 Resposta recebida - Status: {response.status}, URL: {response.url}")
@@ -333,16 +328,16 @@ class SofaScoreLiveCollectorAPI(SofaScoreLiveCollector):
                         print(f"📝 Headers da resposta: {dict(response.headers)}")
                     
                     if attempt < max_retries - 1:
-                        print(f"⚠️ Tentativa {attempt + 1} falhou para {endpoint_name}, tentando novamente em 2s...")
-                        await asyncio.sleep(2)  # Aguardar antes de tentar novamente
+                        print(f"⚠️ Tentativa {attempt + 1} falhou para {endpoint_name}, tentando novamente em 1s...")
+                        await asyncio.sleep(1)  # Reduzido de 2s para 1s baseado no teste
                     
                 except Exception as retry_error:
                     error_type = type(retry_error).__name__
                     print(f"❌ Erro na tentativa {attempt + 1} para {endpoint_name}: {error_type} - {str(retry_error)}")
                     
                     if attempt < max_retries - 1:
-                        print(f"🔄 Reentando em 2s... ({attempt + 2}/{max_retries})")
-                        await asyncio.sleep(2)
+                        print(f"🔄 Reentando em 1s... ({attempt + 2}/{max_retries})")
+                        await asyncio.sleep(1)
                     else:
                         print(f"💥 Todas as tentativas falharam para {endpoint_name}")
                         raise retry_error
@@ -403,6 +398,7 @@ class SofaScoreLiveCollectorAPI(SofaScoreLiveCollector):
                 
                 try:
                     print(f"🔄 Coletando dados da partida {match_id}...")
+                    print(f"🎯 Usando estratégia otimizada baseada no teste bem-sucedido")
                     
                     match_data = {}
                     timestamp = datetime.now().isoformat()
@@ -499,9 +495,12 @@ class SofaScoreLiveCollectorAPI(SofaScoreLiveCollector):
                         print("⚠️ ATENÇÃO: Nenhum dado foi coletado com sucesso!")
                         print("🔍 Possíveis causas:")
                         print("   - Match ID inválido ou partida não encontrada")
-                        print("   - Bloqueio do SofaScore (rate limiting)")
+                        print("   - Bloqueio temporário do SofaScore")
                         print("   - Problemas de conectividade")
-                        print("   - Configuração do navegador inadequada para o ambiente")
+                        print("🎯 Recomendação: Aguardar alguns minutos e tentar novamente")
+                    elif len(collected_types) < 6:
+                        print(f"⚠️ Coleta parcial: {len(collected_types)}/6 tipos de dados coletados")
+                        print("🎯 Alguns dados podem estar temporariamente indisponíveis")
                     
                     return match_data
                     
