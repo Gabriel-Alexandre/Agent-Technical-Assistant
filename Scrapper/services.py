@@ -190,9 +190,9 @@ class SofaScoreLiveCollectorAPI(SofaScoreLiveCollector):
     
     async def create_browser_context(self, playwright):
         """Cria contexto do navegador com configurações otimizadas para Docker"""
-        print(f"🔧 Configurando navegador para ambiente Docker...")
+        print(f"🔧 Configurando navegador para contornar bloqueios...")
         
-        # Argumentos otimizados para Docker e ambientes com limitações
+        # Argumentos otimizados para Docker e contornar detecção
         browser_args = [
             '--no-sandbox',
             '--disable-setuid-sandbox',
@@ -203,59 +203,82 @@ class SofaScoreLiveCollectorAPI(SofaScoreLiveCollector):
             '--disable-renderer-backgrounding',
             '--disable-backgrounding-occluded-windows',
             '--disable-web-security',
-            '--disable-features=TranslateUI',
+            '--disable-features=TranslateUI,VizDisplayCompositor',
             '--disable-ipc-flooding-protection',
-            '--mute-audio',
-            '--disable-background-networking',
             '--disable-default-apps',
             '--disable-sync',
             '--no-first-run',
             '--no-default-browser-check',
             '--disable-background-mode',
-            '--user-agent=Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36'
+            '--disable-blink-features=AutomationControlled',  # Importante para não ser detectado
+            '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         ]
         
-        print(f"🚀 Iniciando navegador Chromium com {len(browser_args)} argumentos...")
+        print(f"🚀 Iniciando navegador Chromium com {len(browser_args)} argumentos anti-detecção...")
         
         try:
             browser = await playwright.chromium.launch(
                 headless=True,
                 args=browser_args,
                 # Configurações adicionais para estabilidade
-                slow_mo=500,  # Pequeno delay entre ações
+                slow_mo=500,  # Delay maior entre ações (1 segundo)
                 timeout=60000  # Timeout maior para inicialização
             )
             
             print(f"✅ Navegador iniciado com sucesso")
             
-            # Configurações do contexto otimizadas
+            # Configurações do contexto otimizadas para parecer humano
             context_options = {
-                'viewport': {'width': 1366, 'height': 768},  # Resolução mais comum
-                'user_agent': 'Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
-                'locale': 'pt-BR',
-                'timezone_id': 'America/Sao_Paulo',
+                'viewport': {'width': 1920, 'height': 1080},  # Resolução desktop comum
+                'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'locale': 'en-US',  # Inglês americano para evitar suspeitas
+                'timezone_id': 'America/New_York',  # Timezone americano
                 'permissions': [],  # Sem permissões especiais
-                'geolocation': {'latitude': -23.5505, 'longitude': -46.6333},  # São Paulo
+                'geolocation': {'latitude': 40.7128, 'longitude': -74.0060},  # Nova York
                 'extra_http_headers': {
-                    'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.9',
                     'Accept-Encoding': 'gzip, deflate, br',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
                     'DNT': '1',
                     'Connection': 'keep-alive',
                     'Upgrade-Insecure-Requests': '1',
-                    'Cache-Control': 'no-cache',
-                    'Pragma': 'no-cache'
+                    'Sec-Fetch-Dest': 'document',
+                    'Sec-Fetch-Mode': 'navigate',
+                    'Sec-Fetch-Site': 'none',
+                    'Sec-Fetch-User': '?1',
+                    'Cache-Control': 'max-age=0'
                 }
             }
             
             print(f"🌐 Criando contexto do navegador...")
             context = await browser.new_context(**context_options)
             
-            # Configurar timeouts
-            context.set_default_timeout(30000)  # 30 segundos
+            # Configurar timeouts mais longos para parecer humano
+            context.set_default_timeout(30000)  # 45 segundos
             context.set_default_navigation_timeout(30000)
             
-            print(f"✅ Contexto criado com sucesso")
+            # Adicionar scripts para mascarar automação
+            await context.add_init_script("""
+                // Remover propriedades que indicam automação
+                Object.defineProperty(navigator, 'webdriver', {
+                    get: () => undefined,
+                });
+                
+                // Mascarar detecção de Playwright
+                delete window.playwright;
+                delete window._playwright;
+                
+                // Adicionar propriedades típicas de navegador real
+                Object.defineProperty(navigator, 'plugins', {
+                    get: () => [1, 2, 3, 4, 5],
+                });
+                
+                Object.defineProperty(navigator, 'languages', {
+                    get: () => ['en-US', 'en'],
+                });
+            """)
+            
+            print(f"✅ Contexto criado com configurações anti-detecção")
             
             return browser, context
             
