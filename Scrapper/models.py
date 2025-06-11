@@ -41,4 +41,130 @@ class ErrorResponse(BaseModel):
     success: bool = False
     message: str
     error_details: Optional[str] = None
+    timestamp: datetime
+
+# Novos modelos para as tabelas adicionais
+
+class FilteredLinksRequest(BaseModel):
+    """Modelo para requisição de salvamento de links filtrados"""
+    collection_timestamp: str = Field(..., description="Timestamp da coleta")
+    source_file: str = Field(..., description="Arquivo fonte dos links")
+    pattern_used: str = Field(..., description="Padrão regex usado")
+    links_data: List[Dict[str, Any]] = Field(..., description="Lista de links filtrados")
+
+class FilteredLinksResponse(BaseModel):
+    """Modelo para resposta de links filtrados"""
+    success: bool
+    message: str
+    data: Optional[Dict[str, Any]] = None
+    record_id: Optional[str] = None
+    total_links: Optional[int] = None
+    timestamp: datetime
+
+class MatchInfoRequest(BaseModel):
+    """Modelo para requisição de informações da partida"""
+    match_id: str = Field(..., description="ID da partida")
+    url_complete: str = Field(..., description="URL completa da partida")
+    url_slug: Optional[str] = Field(None, description="Slug da URL")
+    title: Optional[str] = Field(None, description="Título da partida")
+    home_team: Optional[str] = Field(None, description="Time da casa")
+    away_team: Optional[str] = Field(None, description="Time visitante")
+    tournament: Optional[str] = Field(None, description="Torneio/competição")
+    match_date: Optional[str] = Field(None, description="Data da partida (ISO format)")
+    status: Optional[str] = Field(None, description="Status da partida")
+
+class MatchInfoResponse(BaseModel):
+    """Modelo para resposta de informações da partida"""
+    success: bool
+    message: str
+    data: Optional[Dict[str, Any]] = None
+    record_id: Optional[str] = None
+    timestamp: datetime
+
+class MatchInfoListResponse(BaseModel):
+    """Modelo para resposta de lista de partidas"""
+    success: bool
+    message: str
+    data: Optional[List[Dict[str, Any]]] = None
+    total_matches: Optional[int] = None
+    timestamp: datetime
+
+class MatchStatusUpdateRequest(BaseModel):
+    """Modelo para atualização de status da partida"""
+    match_id: str = Field(..., description="ID da partida")
+    status: str = Field(..., description="Novo status da partida")
+
+class MatchStatusUpdateResponse(BaseModel):
+    """Modelo para resposta de atualização de status"""
+    success: bool
+    message: str
+    match_id: str
+    new_status: str
+    timestamp: datetime
+
+class DatabaseStatsResponse(BaseModel):
+    """Modelo para resposta de estatísticas do banco"""
+    success: bool
+    message: str
+    stats: Optional[Dict[str, Any]] = None
+    timestamp: datetime
+
+# Novos modelos para as rotas de links, screenshots e análise
+
+class LinksCollectionResponse(BaseModel):
+    """Modelo para resposta de coleta de links do SofaScore"""
+    success: bool
+    message: str
+    data: Optional[Dict[str, Any]] = None
+    timestamp: datetime
+
+class ScreenshotRequest(BaseModel):
+    """Modelo para requisição de screenshot"""
+    match_identifier: str = Field(..., description="Identificador da partida (ID, URL ou slug)")
+
+class ScreenshotResponse(BaseModel):
+    """Modelo para resposta de screenshot"""
+    success: bool
+    message: str
+    data: Optional[Dict[str, Any]] = None
+    timestamp: datetime
+
+class ScreenshotAnalysisRequest(BaseModel):
+    """Modelo para requisição de análise de screenshot"""
+    match_identifier: str = Field(..., description="Identificador da partida para capturar screenshot e analisar")
+
+class ScreenshotAnalysisResponse(BaseModel):
+    """Modelo para resposta de análise de screenshot"""
+    success: bool
+    message: str
+    data: Optional[Dict[str, Any]] = None
+    screenshot_data: Optional[Dict[str, Any]] = None
+    timestamp: datetime
+
+# Novos modelos para análise de screenshot
+class ScreenshotAnalysisData(BaseModel):
+    """Modelo para dados de análise de screenshot"""
+    match_id: str
+    match_identifier: str
+    match_url: str
+    home_team: Optional[str] = None
+    away_team: Optional[str] = None
+    analysis_text: str
+    analysis_type: str = "context_based"
+    analysis_metadata: Optional[Dict[str, Any]] = None
+
+class ScreenshotAnalysisListResponse(BaseModel):
+    """Modelo para resposta de lista de análises de screenshot"""
+    success: bool
+    message: str
+    data: Optional[List[Dict[str, Any]]] = None
+    total_analyses: Optional[int] = None
+    timestamp: datetime
+
+class ScreenshotAnalysisDetailResponse(BaseModel):
+    """Modelo para resposta detalhada de análise de screenshot"""
+    success: bool
+    message: str
+    analysis_data: Optional[Dict[str, Any]] = None
+    match_info: Optional[Dict[str, Any]] = None
     timestamp: datetime 

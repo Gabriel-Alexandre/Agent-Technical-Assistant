@@ -31,9 +31,16 @@ from models import (
     MatchDataResponse, 
     SimplifiedDataResponse, 
     AnalysisResponse, 
-    ErrorResponse
+    ErrorResponse,
+    LinksCollectionResponse,
+    ScreenshotRequest,
+    ScreenshotResponse,
+    ScreenshotAnalysisRequest,
+    ScreenshotAnalysisResponse,
+    ScreenshotAnalysisListResponse,
+    ScreenshotAnalysisDetailResponse
 )
-from services import MatchDataService
+from services import MatchDataService, SofaScoreLinksService, SofaScoreScreenshotService, ScreenshotAnalysisService
 from database_service import DatabaseService
 
 # Configuração da aplicação
@@ -46,6 +53,12 @@ async def lifespan(app: FastAPI):
     # Verificar/criar tabelas do banco
     db_service = DatabaseService()
     await db_service.create_tables_if_not_exist()
+    
+    # Inicializar serviço
+    match_service = MatchDataService()
+    links_service = SofaScoreLinksService()
+    screenshot_service = SofaScoreScreenshotService()
+    analysis_service = ScreenshotAnalysisService()
     
     print("✅ API inicializada com sucesso!")
     
@@ -66,11 +79,17 @@ app = FastAPI(
     - 📊 **Dados Completos**: Coleta todos os dados disponíveis de uma partida
     - 🎯 **Dados Simplificados**: Extrai apenas informações relevantes para análise
     - 🤖 **Análise com IA**: Gera sugestões táticas usando GPT-4o-mini
+    - 🔗 **Coleta de Links**: Busca links de partidas na homepage do SofaScore
+    - 📸 **Screenshots**: Captura imagens das páginas de partidas
+    - 🔍 **Análise Visual**: Análise técnica baseada em screenshots
 
     ### Como usar:
     1. **Dados Completos**: `POST /match/{match_id}/full-data`
     2. **Dados Simplificados**: `POST /match/{match_id}/simplified-data`  
     3. **Análise Completa**: `POST /match/{match_id}/analysis`
+    4. **Coletar Links**: `POST /sofascore/collect-links`
+    5. **Screenshot**: `POST /match/{match_identifier}/screenshot`
+    6. **Análise Visual**: `POST /match/{match_identifier}/screenshot-analysis`
 
     ### Banco de Dados:
     - Todos os dados são salvos no Supabase
@@ -96,6 +115,9 @@ app.add_middleware(
 
 # Inicializar serviço
 match_service = MatchDataService()
+links_service = SofaScoreLinksService()
+screenshot_service = SofaScoreScreenshotService()
+analysis_service = ScreenshotAnalysisService()
 
 @app.get("/", tags=["Status"])
 async def root():
@@ -108,7 +130,10 @@ async def root():
         "endpoints": {
             "full_data": "/match/{match_id}/full-data",
             "simplified_data": "/match/{match_id}/simplified-data",
-            "analysis": "/match/{match_id}/analysis"
+            "analysis": "/match/{match_id}/analysis",
+            "collect_links": "/sofascore/collect-links",
+            "screenshot": "/match/{match_identifier}/screenshot",
+            "screenshot_analysis": "/match/{match_identifier}/screenshot-analysis"
         }
     }
 
@@ -313,331 +338,277 @@ async def get_match_history(match_id: str, limit: int = 10):
             detail=f"Erro ao buscar histórico: {str(e)}"
         )
 
-@app.get("/test/playwright",
-         tags=["Testes"],
-         summary="Testar Funcionamento do Playwright",
-         description="""
-         Testa se o Playwright está funcionando corretamente no ambiente de deploy.
-         
-         **O que este teste faz:**
-         - Inicializa o navegador Chromium
-         - Acessa uma página simples (Google)
-         - Verifica se consegue extrair o título da página
-         - Testa acesso ao SofaScore com múltiplas estratégias
-         - Retorna informações detalhadas do sistema
-         
-         **Útil para diagnosticar:**
-         - Problemas de instalação do Playwright
-         - Configurações de navegador inadequadas
-         - Bloqueios de rede
-         - Limitações do ambiente de deploy
-         """)
-async def test_playwright():
-    """Endpoint para testar se o Playwright está funcionando corretamente"""
-    import platform
-    import asyncio
-    from datetime import datetime
-    
-    test_results = {
-        "success": False,
-        "timestamp": datetime.now(),
-        "system_info": {
-            "platform": platform.system(),
-            "python_version": platform.python_version(),
-            "event_loop": type(asyncio.get_running_loop()).__name__,
-            "event_loop_policy": type(asyncio.get_event_loop_policy()).__name__
-        },
-        "tests": {},
-        "errors": []
-    }
-    
+@app.post("/sofascore/collect-links",
+          response_model=LinksCollectionResponse,
+          tags=["Coleta de Links"],
+          summary="Coletar Links de Partidas do SofaScore",
+          description="""
+          Acessa a página inicial do SofaScore e coleta todos os links de partidas disponíveis.
+          
+          **Processo:**
+          1. Acessa a homepage do SofaScore
+          2. Coleta todos os links da página
+          3. Filtra apenas links de partidas (formato: 7letras#id:8números)
+          4. Salva os links filtrados no banco de dados Supabase
+          
+          **Dados salvos:**
+          - URL completa da partida
+          - Texto do link
+          - Título (se disponível)
+          - Match ID extraído
+          - Timestamp da coleta
+          
+          **Uso recomendado:** Para descobrir partidas ativas e monitoramento automático.
+          """)
+async def collect_sofascore_links():
+    """Rota 1: Buscar links no SofaScore e salvar links filtrados no Supabase"""
     try:
-        # Importar Playwright
-        try:
-            from playwright.async_api import async_playwright
-            test_results["tests"]["playwright_import"] = "✅ Sucesso"
-        except ImportError as e:
-            test_results["tests"]["playwright_import"] = f"❌ Falha: {str(e)}"
-            test_results["errors"].append(f"Playwright não instalado: {str(e)}")
-            return test_results
+        print("🔗 Iniciando coleta de links do SofaScore...")
         
-        # Testar inicialização do navegador
-        try:
-            async with async_playwright() as playwright:
-                test_results["tests"]["playwright_init"] = "✅ Sucesso"
-                
-                # Testar criação do navegador com configurações mais robustas
-                try:
-                    browser = await playwright.chromium.launch(
-                        headless=True,
-                        args=[
-                            '--no-sandbox',
-                            '--disable-setuid-sandbox',
-                            '--disable-dev-shm-usage',
-                            '--disable-gpu',
-                            '--disable-extensions',
-                            '--disable-blink-features=AutomationControlled',
-                            '--disable-web-security',
-                            '--disable-features=VizDisplayCompositor',
-                            '--disable-background-timer-throttling',
-                            '--disable-backgrounding-occluded-windows',
-                            '--disable-renderer-backgrounding',
-                            '--disable-field-trial-config',
-                            '--disable-ipc-flooding-protection',
-                            '--no-first-run',
-                            '--no-default-browser-check',
-                            '--no-pings',
-                            '--password-store=basic',
-                            '--use-mock-keychain'
-                        ]
-                    )
-                    
-                    if browser:
-                        test_results["tests"]["browser_launch"] = f"✅ Sucesso - Navegador inicializado"
-                        test_results["system_info"]["browser_version"] = "Chromium (versão não detectável)"
-                    else:
-                        test_results["tests"]["browser_launch"] = f"❌ Falha: Navegador não foi criado"
-                        test_results["errors"].append("Navegador não foi criado corretamente")
-                        return test_results
-                    
-                    # Testar criação de contexto com configurações otimizadas
-                    try:
-                        context = await browser.new_context(
-                            viewport={'width': 1920, 'height': 1080},
-                            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                            extra_http_headers={
-                                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-                                'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
-                                'Accept-Encoding': 'gzip, deflate, br',
-                                'Cache-Control': 'no-cache',
-                                'Pragma': 'no-cache',
-                                'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-                                'Sec-Ch-Ua-Mobile': '?0',
-                                'Sec-Ch-Ua-Platform': '"Windows"',
-                                'Sec-Fetch-Dest': 'document',
-                                'Sec-Fetch-Mode': 'navigate',
-                                'Sec-Fetch-Site': 'none',
-                                'Sec-Fetch-User': '?1',
-                                'Upgrade-Insecure-Requests': '1'
-                            },
-                            ignore_https_errors=True,
-                            java_script_enabled=True
-                        )
-                        test_results["tests"]["context_creation"] = "✅ Sucesso"
-                        
-                        # Testar criação de página
-                        try:
-                            page = await context.new_page()
-                            
-                            # Configurar timeouts mais longos
-                            page.set_default_timeout(30000)  # 30 segundos
-                            page.set_default_navigation_timeout(30000)  # 30 segundos
-                            
-                            # Adicionar script para esconder automação
-                            await page.add_init_script("""
-                                Object.defineProperty(navigator, 'webdriver', {
-                                    get: () => undefined,
-                                });
-                                Object.defineProperty(navigator, 'plugins', {
-                                    get: () => [1, 2, 3, 4, 5],
-                                });
-                                Object.defineProperty(navigator, 'languages', {
-                                    get: () => ['pt-BR', 'pt', 'en'],
-                                });
-                                window.chrome = {
-                                    runtime: {}
-                                };
-                            """)
-                            
-                            test_results["tests"]["page_creation"] = "✅ Sucesso"
-                            
-                            # Testar conectividade básica com sites simples
-                            connectivity_tests = [
-                                {"name": "Google", "url": "https://www.google.com"},
-                                {"name": "Example", "url": "https://example.com"},
-                                {"name": "Httpbin", "url": "https://httpbin.org/get"}
-                            ]
-                            
-                            working_sites = 0
-                            for test_site in connectivity_tests:
-                                try:
-                                    response = await page.goto(test_site["url"], 
-                                                              timeout=15000, 
-                                                              wait_until='domcontentloaded')
-                                    if response.status == 200:
-                                        working_sites += 1
-                                        test_results["tests"][f"{test_site['name'].lower()}_access"] = f"✅ {test_site['name']} - Status: {response.status}"
-                                    else:
-                                        test_results["tests"][f"{test_site['name'].lower()}_access"] = f"⚠️ {test_site['name']} - Status: {response.status}"
-                                except Exception as e:
-                                    test_results["tests"][f"{test_site['name'].lower()}_access"] = f"❌ {test_site['name']} - {str(e)[:50]}..."
-                            
-                            # Avaliar conectividade geral
-                            if working_sites >= 2:
-                                test_results["tests"]["network_connectivity"] = f"✅ Conectividade OK ({working_sites}/{len(connectivity_tests)} sites acessíveis)"
-                            elif working_sites >= 1:
-                                test_results["tests"]["network_connectivity"] = f"⚠️ Conectividade limitada ({working_sites}/{len(connectivity_tests)} sites acessíveis)"
-                            else:
-                                test_results["tests"]["network_connectivity"] = f"❌ Problemas de conectividade (0/{len(connectivity_tests)} sites acessíveis)"
-                                test_results["errors"].append("Problemas graves de conectividade de rede detectados")
-                            
-                            # Testar acesso ao SofaScore com múltiplas estratégias (independente da conectividade geral)
-                            sofascore_strategies = [
-                                {
-                                    "name": "Estratégia 1: Carregamento rápido",
-                                    "url": "https://www.sofascore.com",
-                                    "timeout": 30000,
-                                    "wait_until": "domcontentloaded"
-                                },
-                                {
-                                    "name": "Estratégia 2: Aguardar rede",
-                                    "url": "https://www.sofascore.com",
-                                    "timeout": 45000,
-                                    "wait_until": "networkidle"
-                                },
-                                {
-                                    "name": "Estratégia 3: Acesso direto à API",
-                                    "url": "https://api.sofascore.com/api/v1/sport/football/events/live",
-                                    "timeout": 20000,
-                                    "wait_until": "domcontentloaded"
-                                }
-                            ]
-                            
-                            sofascore_success = False
-                            
-                            for i, strategy in enumerate(sofascore_strategies):
-                                print(f"🔄 Testando {strategy['name']}...")
-                                strategy_start_time = datetime.now()
-                                
-                                try:
-                                    # Simular delay humano antes de cada tentativa
-                                    await page.wait_for_timeout(2000)
-                                    
-                                    # Limpar cookies e cache antes de nova tentativa
-                                    if i > 0:
-                                        await context.clear_cookies()
-                                    
-                                    sofascore_response = await page.goto(
-                                        strategy["url"], 
-                                        timeout=strategy["timeout"],
-                                        wait_until=strategy["wait_until"]
-                                    )
-                                    
-                                    strategy_duration = (datetime.now() - strategy_start_time).total_seconds()
-                                    
-                                    if sofascore_response.status == 200:
-                                        if "api.sofascore.com" in strategy["url"]:
-                                            # Para API, verificar se retornou JSON
-                                            content = await page.content()
-                                            if '{' in content and '}' in content:
-                                                test_results["tests"][f"strategy_{i+1}_result"] = f"✅ {strategy['name']} - API funcionando ({strategy_duration:.1f}s)"
-                                                if not sofascore_success:
-                                                    test_results["tests"]["sofascore_api_access"] = f"✅ {strategy['name']} - API funcionando"
-                                                    sofascore_success = True
-                                            else:
-                                                test_results["tests"][f"strategy_{i+1}_result"] = f"⚠️ {strategy['name']} - Status 200, mas sem JSON na resposta ({strategy_duration:.1f}s)"
-                                        else:
-                                            # Para site principal, verificar título
-                                            try:
-                                                await page.wait_for_timeout(3000)  # Aguardar carregamento
-                                                sofascore_title = await page.title()
-                                                if sofascore_title and len(sofascore_title) > 0:
-                                                    test_results["tests"][f"strategy_{i+1}_result"] = f"✅ {strategy['name']} - Status: {sofascore_response.status}, Título: {sofascore_title[:30]}... ({strategy_duration:.1f}s)"
-                                                    if not sofascore_success:
-                                                        test_results["tests"]["sofascore_website_access"] = f"✅ {strategy['name']} - Status: {sofascore_response.status}, Título: {sofascore_title[:50]}..."
-                                                        sofascore_success = True
-                                                else:
-                                                    test_results["tests"][f"strategy_{i+1}_result"] = f"⚠️ {strategy['name']} - Status 200, mas título vazio ({strategy_duration:.1f}s)"
-                                            except Exception as title_e:
-                                                test_results["tests"][f"strategy_{i+1}_result"] = f"⚠️ {strategy['name']} - Status 200, erro no título: {str(title_e)[:30]}... ({strategy_duration:.1f}s)"
-                                    else:
-                                        test_results["tests"][f"strategy_{i+1}_result"] = f"❌ {strategy['name']} - Status: {sofascore_response.status} ({strategy_duration:.1f}s)"
-                                
-                                except Exception as e:
-                                    strategy_duration = (datetime.now() - strategy_start_time).total_seconds()
-                                    error_msg = str(e)
-                                    if "Timeout" in error_msg:
-                                        test_results["tests"][f"strategy_{i+1}_result"] = f"⏱️ {strategy['name']} - Timeout após {strategy_duration:.1f}s (limite: {strategy['timeout']/1000}s)"
-                                    elif "net::ERR_" in error_msg:
-                                        test_results["tests"][f"strategy_{i+1}_result"] = f"🌐 {strategy['name']} - Erro de rede: {error_msg.split('net::')[1][:20]}... ({strategy_duration:.1f}s)"
-                                    else:
-                                        test_results["tests"][f"strategy_{i+1}_result"] = f"❌ {strategy['name']} - {error_msg[:40]}... ({strategy_duration:.1f}s)"
-                            
-                            # Resultado final do SofaScore
-                            if sofascore_success:
-                                test_results["tests"]["sofascore_final_result"] = "✅ SofaScore acessível com pelo menos uma estratégia"
-                            else:
-                                test_results["tests"]["sofascore_final_result"] = "❌ SofaScore inacessível com todas as estratégias"
-                                test_results["errors"].append("SofaScore não pôde ser acessado com nenhuma das estratégias testadas")
-                            
-                            # Resumo das estratégias testadas
-                            strategy_summary = []
-                            successful_strategies = 0
-                            failed_strategies = 0
-                            
-                            for i in range(len(sofascore_strategies)):
-                                strategy_key = f"strategy_{i+1}_result"
-                                if strategy_key in test_results["tests"]:
-                                    result = test_results["tests"][strategy_key]
-                                    if result.startswith("✅"):
-                                        successful_strategies += 1
-                                        strategy_summary.append(f"✅ Estratégia {i+1}")
-                                    elif result.startswith("⚠️"):
-                                        strategy_summary.append(f"⚠️ Estratégia {i+1}")
-                                    elif result.startswith("⏱️"):
-                                        failed_strategies += 1
-                                        strategy_summary.append(f"⏱️ Estratégia {i+1}")
-                                    elif result.startswith("🌐"):
-                                        failed_strategies += 1
-                                        strategy_summary.append(f"🌐 Estratégia {i+1}")
-                                    else:
-                                        failed_strategies += 1
-                                        strategy_summary.append(f"❌ Estratégia {i+1}")
-                            
-                            test_results["tests"]["strategies_summary"] = f"📊 Resumo: {successful_strategies} sucessos, {failed_strategies} falhas de {len(sofascore_strategies)} estratégias - [{', '.join(strategy_summary)}]"
-                                
-                        except Exception as e:
-                            test_results["tests"]["page_creation"] = f"❌ Falha: {str(e)}"
-                            test_results["errors"].append(f"Erro criação página: {str(e)}")
-                        
-                    except Exception as e:
-                        test_results["tests"]["context_creation"] = f"❌ Falha: {str(e)}"
-                        test_results["errors"].append(f"Erro criação contexto: {str(e)}")
-                    
-                    # Fechar navegador
-                    await browser.close()
-                    test_results["tests"]["browser_cleanup"] = "✅ Sucesso"
-                    
-                except Exception as e:
-                    test_results["tests"]["browser_launch"] = f"❌ Falha: {str(e)}"
-                    test_results["errors"].append(f"Erro inicialização navegador: {str(e)}")
+        # Coletar e filtrar links
+        result = await links_service.collect_and_filter_links()
         
-        except Exception as e:
-            test_results["tests"]["playwright_init"] = f"❌ Falha: {str(e)}"
-            test_results["errors"].append(f"Erro inicialização Playwright: {str(e)}")
+        if result["success"]:
+            return LinksCollectionResponse(**result)
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=result["message"]
+            )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro interno na coleta de links: {str(e)}"
+        )
+
+@app.post("/match/{match_identifier:path}/screenshot",
+          response_model=ScreenshotResponse,
+          tags=["Screenshots"],
+          summary="Capturar Screenshot de Partida",
+          description="""
+          Captura screenshot da página completa de uma partida específica do SofaScore.
+          
+          **Parâmetros aceitos:**
+          - Match ID (8 dígitos): `13970328`
+          - URL completa: `https://www.sofascore.com/pt/football/match/...`
+          - Slug da partida: `slovakia-u21-spain-u21/QXbscwc#id:13197555`
+          
+          **Processo:**
+          1. Constrói a URL da partida baseada no identificador
+          2. Acessa a página da partida
+          3. Captura screenshot da página completa
+          4. Salva o arquivo na pasta `screenshots/`
+          5. Registra log da partida no banco de dados
+          
+          **Dados salvos no banco:**
+          - Informações da partida (times, URL, match_id)
+          - Detalhes do screenshot (nome do arquivo, tamanho)
+          - Status da captura
+          
+          **Modo:** Single (página completa)
+          
+          **Exemplo de uso:**
+          - `/match/slovakia-u21-spain-u21/QXbscwc#id:13197555/screenshot`
+          - `/match/13197555/screenshot`
+          """)
+async def take_match_screenshot(match_identifier: str):
+    """Rota 2: Tirar screenshot de uma partida e salvar log no Supabase"""
+    try:
+        print(f"📸 Iniciando captura de screenshot para: {match_identifier}")
         
-        # Determinar sucesso geral - considerar sucesso se pelo menos funcionalidades básicas funcionaram
-        failed_tests = [test for test, result in test_results["tests"].items() if result.startswith("❌")]
-        critical_tests = ["playwright_import", "playwright_init", "browser_launch", "context_creation", "page_creation", "network_connectivity"]
-        critical_failures = [test for test in failed_tests if test in critical_tests]
+        # Capturar screenshot
+        result = await screenshot_service.take_match_screenshot(match_identifier)
         
-        # Sucesso se funções críticas funcionaram, mesmo que SofaScore tenha problemas
-        test_results["success"] = len(critical_failures) == 0
-        test_results["summary"] = {
-            "total_tests": len(test_results["tests"]),
-            "passed": len(test_results["tests"]) - len(failed_tests),
-            "failed": len(failed_tests),
-            "critical_failures": len(critical_failures),
-            "failed_tests": failed_tests,
-            "note": "Sucesso = funções críticas do Playwright funcionando, mesmo com problemas no SofaScore"
-        }
+        if result["success"]:
+            return ScreenshotResponse(**result)
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=result["message"]
+            )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro interno na captura de screenshot: {str(e)}"
+        )
+
+@app.post("/match/{match_identifier:path}/screenshot-analysis",
+          response_model=ScreenshotAnalysisResponse,
+          tags=["Análise de Screenshots"],
+          summary="Análise Técnica a partir de Screenshot",
+          description="""
+          Captura screenshot de uma partida e gera análise técnica baseada no contexto visual.
+          
+          **Processo completo:**
+          1. Captura screenshot da página da partida
+          2. Extrai informações contextuais (times, match_id, URL)
+          3. Gera análise técnica especializada considerando:
+             - Situação atual da partida
+             - Contexto tático observável
+             - Recomendações para ambos os times
+             - Alertas críticos
+             - Previsão tática
+          
+          **Análise inclui:**
+          - 📊 Situação atual da partida
+          - 🎯 Análise visual do screenshot
+          - ⚽ Contexto tático
+          - 🔍 Recomendações técnicas específicas
+          - ⚠️ Alertas críticos
+          - 📈 Previsão tática
+          
+          **Requisitos:** 
+          - Playwright funcionando para captura
+          - Screenshot salvo com sucesso
+          
+          **Nota:** Esta análise é baseada no contexto da partida e informações visuais disponíveis no momento da captura.
+          """)
+async def analyze_match_from_screenshot(match_identifier: str):
+    """Rota 3: Análise técnica do momento da partida a partir do screenshot"""
+    try:
+        print(f"🤖 Iniciando análise técnica via screenshot para: {match_identifier}")
         
-        return test_results
+        # Gerar análise a partir do screenshot
+        result = await analysis_service.analyze_match_from_screenshot(match_identifier)
+        
+        if result["success"]:
+            return ScreenshotAnalysisResponse(**result)
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=result["message"]
+            )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro interno na análise de screenshot: {str(e)}"
+        )
+
+# Novas rotas para consultar análises de screenshot
+@app.get("/match/{match_id}/screenshot-analyses",
+         response_model=ScreenshotAnalysisListResponse,
+         tags=["Análise de Screenshots"],
+         summary="Listar Análises de Screenshot de uma Partida",
+         description="""
+         Recupera todas as análises de screenshot realizadas para uma partida específica.
+         
+         **Retorna:**
+         - Lista de análises ordenadas por data (mais recente primeiro)
+         - Informações básicas de cada análise
+         - Metadados da análise
+         - Timestamps de criação
+         
+         **Parâmetros:**
+         - match_id: ID da partida (8 dígitos)
+         - limit: Número máximo de análises a retornar (padrão: 10)
+         """)
+async def get_match_screenshot_analyses(match_id: str, limit: int = 10):
+    """Recupera análises de screenshot de uma partida específica"""
+    try:
+        database = DatabaseService()
+        analyses = await database.get_screenshot_analysis(match_id, limit)
+        
+        return ScreenshotAnalysisListResponse(
+            success=True,
+            message=f"Encontradas {len(analyses)} análise(s) para a partida {match_id}",
+            data=analyses,
+            total_analyses=len(analyses),
+            timestamp=datetime.now()
+        )
         
     except Exception as e:
-        test_results["errors"].append(f"Erro crítico: {str(e)}")
-        test_results["tests"]["critical_error"] = f"❌ {str(e)}"
-        return test_results
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao buscar análises: {str(e)}"
+        )
+
+@app.get("/match/{match_id}/screenshot-analysis/latest",
+         response_model=ScreenshotAnalysisDetailResponse,
+         tags=["Análise de Screenshots"],
+         summary="Obter Análise de Screenshot Mais Recente",
+         description="""
+         Recupera a análise de screenshot mais recente de uma partida específica.
+         
+         **Retorna:**
+         - Análise completa mais recente
+         - Texto da análise técnica
+         - Informações da partida
+         - Metadados da análise
+         """)
+async def get_latest_screenshot_analysis(match_id: str):
+    """Recupera a análise de screenshot mais recente de uma partida"""
+    try:
+        database = DatabaseService()
+        analysis = await database.get_latest_screenshot_analysis(match_id)
+        
+        if not analysis:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Nenhuma análise de screenshot encontrada para a partida {match_id}"
+            )
+        
+        return ScreenshotAnalysisDetailResponse(
+            success=True,
+            message="Análise mais recente recuperada com sucesso",
+            analysis_data=analysis,
+            match_info={
+                "match_id": analysis.get("match_id"),
+                "home_team": analysis.get("home_team"),
+                "away_team": analysis.get("away_team"),
+                "match_url": analysis.get("match_url")
+            },
+            timestamp=datetime.now()
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao buscar análise mais recente: {str(e)}"
+        )
+
+@app.get("/screenshot-analyses",
+         response_model=ScreenshotAnalysisListResponse,
+         tags=["Análise de Screenshots"],
+         summary="Listar Todas as Análises de Screenshot",
+         description="""
+         Recupera todas as análises de screenshot realizadas no sistema.
+         
+         **Retorna:**
+         - Lista de todas as análises ordenadas por data
+         - Informações básicas de cada análise
+         - Filtros por tipo de análise
+         - Paginação com limite configurável
+         """)
+async def get_all_screenshot_analyses(limit: int = 50):
+    """Recupera todas as análises de screenshot do sistema"""
+    try:
+        database = DatabaseService()
+        analyses = await database.get_all_screenshot_analyses(limit)
+        
+        return ScreenshotAnalysisListResponse(
+            success=True,
+            message=f"Encontradas {len(analyses)} análise(s) no sistema",
+            data=analyses,
+            total_analyses=len(analyses),
+            timestamp=datetime.now()
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao buscar análises: {str(e)}"
+        )
 
 # Handler de erros global
 @app.exception_handler(Exception)
