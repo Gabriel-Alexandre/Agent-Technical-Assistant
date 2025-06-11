@@ -23,5 +23,13 @@ services:
     security_opt:
       - seccomp:unconfined
     # Limitar recursos se necessário (descomente se necessário)
+    mem_limit: 4g
+    cpus: '2.0'
+    
+    # Variáveis de ambiente específicas para Docker
+    environment:
+      - PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
+      - PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true
+    # Limitar recursos se necessário (descomente se necessário)
     # mem_limit: 2g
     # cpus: '1.0' 

@@ -293,34 +293,181 @@ async def get_match_analysis(match_id: str):
          summary="Histórico de Coletas da Partida",
          description="Recupera o histórico de coletas de dados de uma partida específica")
 async def get_match_history(match_id: str, limit: int = 10):
-    """Recuperar histórico de coletas de uma partida"""
+    """Endpoint para recuperar histórico de coletas de uma partida"""
     try:
-        # Validar match_id
-        if not match_id or not match_id.isdigit():
-            raise HTTPException(
-                status_code=400,
-                detail="Match ID deve ser um número válido"
-            )
-        
-        # Buscar histórico
         db_service = DatabaseService()
-        history = await db_service.get_match_data(match_id, limit)
+        
+        # Buscar histórico no banco
+        history = await db_service.get_match_history(match_id, limit)
         
         return {
             "success": True,
             "match_id": match_id,
             "total_records": len(history),
-            "records": history,
-            "timestamp": datetime.now()
+            "history": history
         }
-    
-    except HTTPException:
-        raise
+        
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"Erro ao buscar histórico: {str(e)}"
         )
+
+@app.get("/test/playwright",
+         tags=["Testes"],
+         summary="Testar Funcionamento do Playwright",
+         description="""
+         Testa se o Playwright está funcionando corretamente no ambiente de deploy.
+         
+         **O que este teste faz:**
+         - Inicializa o navegador Chromium
+         - Acessa uma página simples (Google)
+         - Verifica se consegue extrair o título da página
+         - Testa acesso ao SofaScore
+         - Retorna informações detalhadas do sistema
+         
+         **Útil para diagnosticar:**
+         - Problemas de instalação do Playwright
+         - Configurações de navegador inadequadas
+         - Bloqueios de rede
+         - Limitações do ambiente de deploy
+         """)
+async def test_playwright():
+    """Endpoint para testar se o Playwright está funcionando corretamente"""
+    import platform
+    import asyncio
+    from datetime import datetime
+    
+    test_results = {
+        "success": False,
+        "timestamp": datetime.now(),
+        "system_info": {
+            "platform": platform.system(),
+            "python_version": platform.python_version(),
+            "event_loop": type(asyncio.get_running_loop()).__name__,
+            "event_loop_policy": type(asyncio.get_event_loop_policy()).__name__
+        },
+        "tests": {},
+        "errors": []
+    }
+    
+    try:
+        # Importar Playwright
+        try:
+            from playwright.async_api import async_playwright
+            test_results["tests"]["playwright_import"] = "✅ Sucesso"
+        except ImportError as e:
+            test_results["tests"]["playwright_import"] = f"❌ Falha: {str(e)}"
+            test_results["errors"].append(f"Playwright não instalado: {str(e)}")
+            return test_results
+        
+        # Testar inicialização do navegador
+        try:
+            async with async_playwright() as playwright:
+                test_results["tests"]["playwright_init"] = "✅ Sucesso"
+                
+                # Testar criação do navegador
+                try:
+                    browser = await playwright.chromium.launch(
+                        headless=True,
+                        args=[
+                            '--no-sandbox',
+                            '--disable-setuid-sandbox',
+                            '--disable-dev-shm-usage',
+                            '--disable-gpu',
+                            '--disable-extensions'
+                        ]
+                    )
+                    
+                    browser_version = await browser.version()
+                    test_results["tests"]["browser_launch"] = f"✅ Sucesso - Versão: {browser_version}"
+                    test_results["system_info"]["browser_version"] = browser_version
+                    
+                    # Testar criação de contexto
+                    try:
+                        context = await browser.new_context(
+                            viewport={'width': 1920, 'height': 1080},
+                            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                        )
+                        test_results["tests"]["context_creation"] = "✅ Sucesso"
+                        
+                        # Testar criação de página
+                        try:
+                            page = await context.new_page()
+                            test_results["tests"]["page_creation"] = "✅ Sucesso"
+                            
+                            # Testar acesso ao Google
+                            try:
+                                response = await page.goto('https://www.google.com', timeout=15000)
+                                google_title = await page.title()
+                                test_results["tests"]["google_access"] = f"✅ Sucesso - Status: {response.status}, Título: {google_title}"
+                                
+                                # Testar acesso ao SofaScore
+                                try:
+                                    sofascore_response = await page.goto('https://www.sofascore.com', timeout=15000)
+                                    sofascore_title = await page.title()
+                                    test_results["tests"]["sofascore_access"] = f"✅ Sucesso - Status: {sofascore_response.status}, Título: {sofascore_title[:50]}..."
+                                    
+                                    # Testar acesso a API do SofaScore
+                                    try:
+                                        api_response = await page.goto('https://www.sofascore.com/api/v1/sport/football/events/live', timeout=15000)
+                                        test_results["tests"]["sofascore_api"] = f"✅ API acessível - Status: {api_response.status}"
+                                        
+                                        if api_response.status == 200:
+                                            content = await page.content()
+                                            if '{' in content and '}' in content:
+                                                test_results["tests"]["sofascore_api_json"] = "✅ JSON detectado na resposta"
+                                            else:
+                                                test_results["tests"]["sofascore_api_json"] = "⚠️ JSON não detectado"
+                                        
+                                    except Exception as e:
+                                        test_results["tests"]["sofascore_api"] = f"❌ Falha: {str(e)}"
+                                        test_results["errors"].append(f"Erro API SofaScore: {str(e)}")
+                                    
+                                except Exception as e:
+                                    test_results["tests"]["sofascore_access"] = f"❌ Falha: {str(e)}"
+                                    test_results["errors"].append(f"Erro acesso SofaScore: {str(e)}")
+                                
+                            except Exception as e:
+                                test_results["tests"]["google_access"] = f"❌ Falha: {str(e)}"
+                                test_results["errors"].append(f"Erro acesso Google: {str(e)}")
+                            
+                        except Exception as e:
+                            test_results["tests"]["page_creation"] = f"❌ Falha: {str(e)}"
+                            test_results["errors"].append(f"Erro criação página: {str(e)}")
+                        
+                    except Exception as e:
+                        test_results["tests"]["context_creation"] = f"❌ Falha: {str(e)}"
+                        test_results["errors"].append(f"Erro criação contexto: {str(e)}")
+                    
+                    # Fechar navegador
+                    await browser.close()
+                    test_results["tests"]["browser_cleanup"] = "✅ Sucesso"
+                    
+                except Exception as e:
+                    test_results["tests"]["browser_launch"] = f"❌ Falha: {str(e)}"
+                    test_results["errors"].append(f"Erro inicialização navegador: {str(e)}")
+        
+        except Exception as e:
+            test_results["tests"]["playwright_init"] = f"❌ Falha: {str(e)}"
+            test_results["errors"].append(f"Erro inicialização Playwright: {str(e)}")
+        
+        # Determinar sucesso geral
+        failed_tests = [test for test, result in test_results["tests"].items() if result.startswith("❌")]
+        test_results["success"] = len(failed_tests) == 0
+        test_results["summary"] = {
+            "total_tests": len(test_results["tests"]),
+            "passed": len(test_results["tests"]) - len(failed_tests),
+            "failed": len(failed_tests),
+            "failed_tests": failed_tests
+        }
+        
+        return test_results
+        
+    except Exception as e:
+        test_results["errors"].append(f"Erro crítico: {str(e)}")
+        test_results["tests"]["critical_error"] = f"❌ {str(e)}"
+        return test_results
 
 # Handler de erros global
 @app.exception_handler(Exception)

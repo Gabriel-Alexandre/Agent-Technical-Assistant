@@ -167,4 +167,30 @@ class DatabaseService:
             
         except Exception as e:
             print(f"❌ Erro ao buscar dados mais recentes: {e}")
-            return None 
+            return None
+    
+    async def get_match_history(self, match_id: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """Recupera o histórico de coletas de uma partida específica"""
+        try:
+            result = self.client.table('match_data')\
+                .select('id, match_id, collected_at, created_at, updated_at')\
+                .eq('match_id', match_id)\
+                .order('collected_at', desc=True)\
+                .limit(limit)\
+                .execute()
+            
+            # Formatar dados para resposta mais amigável
+            history = []
+            for record in result.data if result.data else []:
+                history.append({
+                    'record_id': record.get('id'),
+                    'collected_at': record.get('collected_at'),
+                    'created_at': record.get('created_at'),
+                    'updated_at': record.get('updated_at')
+                })
+            
+            return history
+            
+        except Exception as e:
+            print(f"❌ Erro ao buscar histórico: {e}")
+            return [] 
