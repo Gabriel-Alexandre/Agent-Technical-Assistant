@@ -340,6 +340,9 @@ class SofaScoreLiveCollectorAPI(SofaScoreLiveCollector):
             print(f"❌ Playwright não está instalado: {e}")
             return None
         
+        # Verificar e instalar navegadores se necessário
+        await self.ensure_playwright_browsers()
+        
         # Verificar e exibir informações do event loop
         import platform
         loop = asyncio.get_running_loop()
@@ -484,6 +487,75 @@ class SofaScoreLiveCollectorAPI(SofaScoreLiveCollector):
             print(f"   - Verificar permissões do sistema")
             print(f"   - Verificar recursos disponíveis (memória/CPU)")
             return None
+
+    async def ensure_playwright_browsers(self):
+        """Verifica e instala navegadores do Playwright se necessário"""
+        try:
+            from playwright.sync_api import sync_playwright
+            
+            print(f"🔍 Verificando instalação dos navegadores do Playwright...")
+            
+            with sync_playwright() as p:
+                try:
+                    # Tentar obter o caminho do executável do Chromium
+                    chromium_path = p.chromium.executable_path
+                    print(f"✅ Chromium encontrado em: {chromium_path}")
+                    
+                    # Verificar se o arquivo existe
+                    import os
+                    if os.path.exists(chromium_path):
+                        print(f"✅ Chromium executável verificado com sucesso")
+                        return True
+                    else:
+                        print(f"❌ Chromium executável não encontrado em: {chromium_path}")
+                        
+                except Exception as e:
+                    print(f"❌ Erro ao verificar Chromium: {str(e)}")
+            
+            # Se chegou aqui, os navegadores não estão instalados
+            print(f"🔄 Tentando instalar navegadores do Playwright automaticamente...")
+            
+            import subprocess
+            import sys
+            
+            try:
+                # Tentar instalar chromium
+                result = subprocess.run([
+                    sys.executable, '-m', 'playwright', 'install', 'chromium'
+                ], capture_output=True, text=True, timeout=300)  # 5 minutos timeout
+                
+                if result.returncode == 0:
+                    print(f"✅ Chromium instalado com sucesso!")
+                    
+                    # Tentar instalar dependências do sistema
+                    dep_result = subprocess.run([
+                        sys.executable, '-m', 'playwright', 'install-deps', 'chromium'
+                    ], capture_output=True, text=True, timeout=180)  # 3 minutos timeout
+                    
+                    if dep_result.returncode == 0:
+                        print(f"✅ Dependências do Chromium instaladas com sucesso!")
+                    else:
+                        print(f"⚠️ Aviso: Algumas dependências podem não ter sido instaladas")
+                        print(f"Saída: {dep_result.stdout}")
+                        print(f"Erro: {dep_result.stderr}")
+                    
+                    return True
+                else:
+                    print(f"❌ Falha ao instalar Chromium")
+                    print(f"Saída: {result.stdout}")
+                    print(f"Erro: {result.stderr}")
+                    return False
+                    
+            except subprocess.TimeoutExpired:
+                print(f"❌ Timeout na instalação do Chromium")
+                return False
+            except Exception as e:
+                print(f"❌ Erro na instalação automática: {str(e)}")
+                return False
+                
+        except Exception as e:
+            print(f"❌ Erro ao verificar/instalar navegadores: {str(e)}")
+            return False
 
 # Adaptar o simplificador para trabalhar com dados em memória
 class MatchDataSimplifierAPI(MatchDataSimplifier):

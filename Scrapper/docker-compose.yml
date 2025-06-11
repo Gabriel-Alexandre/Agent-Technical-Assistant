@@ -28,7 +28,6 @@ services:
     
     # Variáveis de ambiente específicas para Docker
     environment:
-      - PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
       - PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true
     # Limitar recursos se necessário (descomente se necessário)
     # mem_limit: 2g
