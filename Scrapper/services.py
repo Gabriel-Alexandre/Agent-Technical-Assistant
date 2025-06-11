@@ -341,7 +341,7 @@ class SofaScoreLiveCollectorAPI(SofaScoreLiveCollector):
             return None
         
         # Verificar e instalar navegadores se necessário
-        await self.ensure_playwright_browsers()
+        # await self.ensure_playwright_browsers()  # Comentado temporariamente devido a conflito sync/async
         
         # Verificar e exibir informações do event loop
         import platform
@@ -359,8 +359,24 @@ class SofaScoreLiveCollectorAPI(SofaScoreLiveCollector):
                 browser, context = await self.create_browser_context(playwright)
                 page = await context.new_page()
                 
-                print(f"📊 Navegador iniciado - Versão: {await browser.version()}")
-                print(f"🌍 User Agent: {await page.evaluate('navigator.userAgent')}")
+                try:
+                    # Obter versão do navegador de forma segura
+                    browser_version = "Unknown"
+                    try:
+                        browser_version = await browser.version()
+                        print(f"📊 Navegador iniciado - Versão: {browser_version}")
+                    except Exception as e:
+                        print(f"📊 Navegador iniciado - Versão não disponível ({str(e)})")
+                    
+                    # Obter User Agent de forma segura  
+                    try:
+                        user_agent = await page.evaluate('() => navigator.userAgent')
+                        print(f"🌍 User Agent: {user_agent[:100]}...")
+                    except Exception as e:
+                        print(f"🌍 User Agent: Não disponível ({str(e)})")
+                    
+                except Exception as e:
+                    print(f"⚠️ Erro ao obter informações do navegador: {str(e)}")
                 
                 try:
                     print(f"🔄 Coletando dados da partida {match_id}...")
@@ -491,28 +507,33 @@ class SofaScoreLiveCollectorAPI(SofaScoreLiveCollector):
     async def ensure_playwright_browsers(self):
         """Verifica e instala navegadores do Playwright se necessário"""
         try:
-            from playwright.sync_api import sync_playwright
+            from playwright.async_api import async_playwright
             
             print(f"🔍 Verificando instalação dos navegadores do Playwright...")
             
-            with sync_playwright() as p:
-                try:
-                    # Tentar obter o caminho do executável do Chromium
-                    chromium_path = p.chromium.executable_path
-                    print(f"✅ Chromium encontrado em: {chromium_path}")
-                    
-                    # Verificar se o arquivo existe
-                    import os
-                    if os.path.exists(chromium_path):
-                        print(f"✅ Chromium executável verificado com sucesso")
-                        return True
-                    else:
-                        print(f"❌ Chromium executável não encontrado em: {chromium_path}")
+            try:
+                # Usar API async em vez da sync
+                async with async_playwright() as p:
+                    try:
+                        # Tentar obter o caminho do executável do Chromium
+                        chromium_path = p.chromium.executable_path
+                        print(f"✅ Chromium encontrado em: {chromium_path}")
                         
-                except Exception as e:
-                    print(f"❌ Erro ao verificar Chromium: {str(e)}")
+                        # Verificar se o arquivo existe
+                        import os
+                        if os.path.exists(chromium_path):
+                            print(f"✅ Chromium executável verificado com sucesso")
+                            return True
+                        else:
+                            print(f"❌ Chromium executável não encontrado em: {chromium_path}")
+                            
+                    except Exception as e:
+                        print(f"❌ Erro ao verificar Chromium: {str(e)}")
+                        
+            except Exception as e:
+                print(f"❌ Erro ao inicializar Playwright para verificação: {str(e)}")
             
-            # Se chegou aqui, os navegadores não estão instalados
+            # Se chegou aqui, os navegadores podem não estar instalados ou funcionando
             print(f"🔄 Tentando instalar navegadores do Playwright automaticamente...")
             
             import subprocess

@@ -74,11 +74,12 @@ RUN mkdir -p data live_data live_data_simplify analysis logs
 RUN adduser --disabled-password --gecos '' appuser && \
     chown -R appuser:appuser /app && \
     chown -R appuser:appuser /ms-playwright && \
-    chmod -R 755 /app/data && \
-    chmod -R 755 /app/live_data && \
-    chmod -R 755 /app/live_data_simplify && \
-    chmod -R 755 /app/analysis && \
-    chmod -R 755 /app/logs
+    chmod -R 755 /app && \
+    chmod -R 775 /app/data && \
+    chmod -R 775 /app/live_data && \
+    chmod -R 775 /app/live_data_simplify && \
+    chmod -R 775 /app/analysis && \
+    chmod -R 775 /app/logs
 
 USER appuser
 

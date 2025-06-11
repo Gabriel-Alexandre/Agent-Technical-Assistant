@@ -52,8 +52,16 @@ for dir in data live_data live_data_simplify analysis logs; do
         mkdir -p "/app/$dir"
     fi
     
+    # Ajustar permissões se necessário
     if [ ! -w "/app/$dir" ]; then
-        echo "⚠️ Aviso: Sem permissão de escrita em $dir"
+        echo "🔧 Ajustando permissões para $dir"
+        # Como não somos root aqui, vamos apenas verificar se podemos criar arquivos
+        touch "/app/$dir/.test" 2>/dev/null && {
+            rm "/app/$dir/.test"
+            echo "✅ Permissões OK para $dir"
+        } || {
+            echo "⚠️ Aviso: Sem permissão de escrita em $dir"
+        }
     else
         echo "✅ Permissões OK para $dir"
     fi
