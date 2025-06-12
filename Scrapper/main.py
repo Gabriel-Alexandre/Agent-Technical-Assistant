@@ -143,12 +143,13 @@ async def health_check():
     try:
         # Testar conexão com banco
         db_service = DatabaseService()
+        db_connected = await db_service.test_connection()
         
         return {
-            "status": "healthy",
+            "status": "healthy" if db_connected else "degraded",
             "timestamp": datetime.now(),
             "services": {
-                "database": "✅ Connected",
+                "database": "✅ Connected" if db_connected else "❌ Connection failed",
                 "ai_assistant": "✅ Available" if match_service.assistant else "⚠️ Not configured"
             }
         }
@@ -156,6 +157,48 @@ async def health_check():
         raise HTTPException(
             status_code=503,
             detail=f"Serviço indisponível: {str(e)}"
+        )
+
+@app.get("/test/database", tags=["Status"])
+async def test_database_connection():
+    """Teste específico de conectividade com o Supabase"""
+    try:
+        db_service = DatabaseService()
+        
+        print("🔄 Iniciando teste de conectividade com Supabase...")
+        connectivity_ok = await db_service.test_connection()
+        
+        if connectivity_ok:
+            # Tentar também buscar estatísticas do banco
+            try:
+                stats = await db_service.get_database_stats()
+                return {
+                    "status": "success",
+                    "message": "Conectividade com Supabase confirmada",
+                    "connectivity": True,
+                    "database_stats": stats,
+                    "timestamp": datetime.now()
+                }
+            except Exception as stats_error:
+                return {
+                    "status": "partial",
+                    "message": "Conectividade básica OK, mas erro ao obter estatísticas",
+                    "connectivity": True,
+                    "stats_error": str(stats_error),
+                    "timestamp": datetime.now()
+                }
+        else:
+            return {
+                "status": "error",
+                "message": "Falha na conectividade com Supabase",
+                "connectivity": False,
+                "timestamp": datetime.now()
+            }
+            
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro no teste de conectividade: {str(e)}"
         )
 
 @app.post("/match/{match_id}/full-data", 

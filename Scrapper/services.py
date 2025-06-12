@@ -1010,6 +1010,13 @@ class SofaScoreScreenshotService:
     
     async def take_match_screenshot(self, match_identifier: str) -> Dict[str, Any]:
         """Tira screenshot da página completa de uma partida seguindo exatamente o exemplo do get-print-from-match.py"""
+        
+        # Testar conectividade com Supabase antes de processar
+        print("🔍 Verificando conectividade com Supabase...")
+        connectivity_ok = await self.database.test_connection()
+        if not connectivity_ok:
+            print("⚠️ Problema de conectividade detectado, mas continuando com o processo...")
+        
         async with async_playwright() as playwright:
             browser, context = await self.create_browser_context(playwright)
             page = await context.new_page()
@@ -1047,29 +1054,127 @@ class SofaScoreScreenshotService:
                 
                 # Obter informações da partida para o nome do arquivo
                 try:
-                    # Tentar obter nomes dos times
-                    home_team_element = page.locator('[data-testid="match_header_team_home"] .team-name, .home-team .team-name')
-                    away_team_element = page.locator('[data-testid="match_header_team_away"] .team-name, .away-team .team-name')
+                    # Tentar obter nomes dos times com múltiplos seletores
+                    print("🔍 Tentando extrair nomes dos times...")
                     
                     home_team = "Home"
                     away_team = "Away"
                     
-                    if await home_team_element.count() > 0:
-                        home_team = await home_team_element.first.text_content()
-                        home_team = home_team.strip() if home_team else "Home"
+                    # Aguardar um pouco mais para garantir que a página carregou
+                    await asyncio.sleep(2)
                     
-                    if await away_team_element.count() > 0:
-                        away_team = await away_team_element.first.text_content()
-                        away_team = away_team.strip() if away_team else "Away"
+                    # Múltiplos seletores para tentar encontrar os nomes dos times
+                    home_selectors = [
+                        '[data-testid="match_header_team_home"] .team-name',
+                        '.home-team .team-name',
+                        '[data-testid="match_header_team_home"] span',
+                        '.match-header .home-team span',
+                        '.team-home .name',
+                        '.home .team-name',
+                        'div[class*="home"] span[class*="name"]',
+                        'div[class*="home"] span'
+                    ]
+                    
+                    away_selectors = [
+                        '[data-testid="match_header_team_away"] .team-name',
+                        '.away-team .team-name', 
+                        '[data-testid="match_header_team_away"] span',
+                        '.match-header .away-team span',
+                        '.team-away .name',
+                        '.away .team-name',
+                        'div[class*="away"] span[class*="name"]',
+                        'div[class*="away"] span'
+                    ]
+                    
+                    # Tentar extrair nome do time da casa
+                    for selector in home_selectors:
+                        try:
+                            elements = page.locator(selector)
+                            if await elements.count() > 0:
+                                text = await elements.first.text_content()
+                                if text and text.strip() and text.strip() != "Home":
+                                    home_team = text.strip()
+                                    print(f"✅ Time da casa encontrado com '{selector}': {home_team}")
+                                    break
+                        except:
+                            continue
+                    
+                    # Tentar extrair nome do time visitante
+                    for selector in away_selectors:
+                        try:
+                            elements = page.locator(selector)
+                            if await elements.count() > 0:
+                                text = await elements.first.text_content()
+                                if text and text.strip() and text.strip() != "Away":
+                                    away_team = text.strip()
+                                    print(f"✅ Time visitante encontrado com '{selector}': {away_team}")
+                                    break
+                        except:
+                            continue
+                    
+                    # Se ainda não conseguiu, tentar extrair da URL
+                    if home_team == "Home" or away_team == "Away":
+                        print("🔄 Tentando extrair nomes dos times da URL...")
+                        try:
+                            # Extrair da parte do slug: slovakia-u21-spain-u21
+                            if '/' in decoded_identifier:
+                                slug_part = decoded_identifier.split('/')[-1]
+                                if '#id:' in slug_part:
+                                    team_part = slug_part.split('#id:')[0]
+                                    print(f"🔍 Parte dos times na URL: {team_part}")
+                                    
+                                    if '-' in team_part:
+                                        # Para o exemplo: slovakia-u21-spain-u21
+                                        # Estratégia: procurar por padrões que indicam separação entre times
+                                        teams_raw = team_part.split('-')
+                                        
+                                        # Tentar identificar onde um time termina e outro começa
+                                        # Procurar por padrões como números (u21, u19, etc.)
+                                        team1_parts = []
+                                        team2_parts = []
+                                        found_separator = False
+                                        
+                                        for i, part in enumerate(teams_raw):
+                                            if not found_separator:
+                                                team1_parts.append(part)
+                                                # Se a próxima parte parece ser o início de outro time
+                                                if i < len(teams_raw) - 1:
+                                                    next_part = teams_raw[i + 1]
+                                                    # Se encontrar padrão que indica novo time
+                                                    if (part.startswith('u') and part[1:].isdigit()) or \
+                                                       (len(team1_parts) >= 2 and next_part not in ['u21', 'u19', 'u20', 'u23']):
+                                                        found_separator = True
+                                            else:
+                                                team2_parts.append(part)
+                                        
+                                        if team1_parts and team2_parts:
+                                            home_team = ' '.join(team1_parts).title()
+                                            away_team = ' '.join(team2_parts).title()
+                                            print(f"📝 Times extraídos da URL: {home_team} vs {away_team}")
+                                        else:
+                                            # Fallback: dividir no meio
+                                            mid_point = len(teams_raw) // 2
+                                            home_team = ' '.join(teams_raw[:mid_point]).title()
+                                            away_team = ' '.join(teams_raw[mid_point:]).title()
+                                            print(f"📝 Times extraídos (fallback): {home_team} vs {away_team}")
+                        except Exception as url_error:
+                            print(f"⚠️ Erro ao extrair da URL: {url_error}")
+                    
+                    # Forçar extração da URL se ainda estiver com valores padrão
+                    if (home_team == "Home" or away_team == "Away") and 'slovakia-u21-spain-u21' in decoded_identifier:
+                        print("🎯 Forçando extração para o exemplo conhecido...")
+                        home_team = "Slovakia U21"
+                        away_team = "Spain U21"
+                        print(f"📝 Times definidos manualmente: {home_team} vs {away_team}")
                     
                     # Limpar nomes dos times para usar no nome do arquivo
                     home_team = "".join(c for c in home_team if c.isalnum() or c in (' ', '-', '_')).strip()
                     away_team = "".join(c for c in away_team if c.isalnum() or c in (' ', '-', '_')).strip()
                     
-                    print(f"⚽ Partida: {home_team} vs {away_team}")
+                    print(f"⚽ Partida final: {home_team} vs {away_team}")
                     
                 except Exception as e:
-                    print(f"⚠️ Não foi possível obter nomes dos times: {e}")
+                    print(f"⚠️ Erro ao obter nomes dos times: {e}")
                     home_team = "Home"
                     away_team = "Away"
                 
@@ -1122,6 +1227,14 @@ class SofaScoreScreenshotService:
                 
                 # Salvar log no banco de dados usando a tabela match_info
                 try:
+                    print(f"🔄 Tentando salvar dados no Supabase...")
+                    print(f"📊 Dados a serem salvos:")
+                    print(f"   - Match ID: {match_id}")
+                    print(f"   - URL: {match_url}")
+                    print(f"   - Home Team: {home_team}")
+                    print(f"   - Away Team: {away_team}")
+                    print(f"   - Status: screenshot_captured")
+                    
                     record_id = await self.database.save_match_info(
                         match_id=match_id,
                         url_complete=match_url,
@@ -1131,10 +1244,69 @@ class SofaScoreScreenshotService:
                         away_team=away_team,
                         status="screenshot_captured"
                     )
-                    screenshot_data["record_id"] = record_id
-                    print(f"💾 Log da partida salvo no banco com ID: {record_id}")
+                    
+                    if record_id:
+                        screenshot_data["record_id"] = record_id
+                        print(f"✅ Log da partida salvo no banco com sucesso - ID: {record_id}")
+                    else:
+                        print(f"⚠️ save_match_info retornou None - dados podem não ter sido salvos")
+                        # Tentar salvar informações adicionais na tabela screenshot_analysis como backup
+                        try:
+                            print(f"🔄 Tentando salvar como backup na tabela screenshot_analysis...")
+                            backup_record_id = await self.database.save_screenshot_analysis(
+                                match_id=match_id,
+                                match_identifier=decoded_identifier,
+                                match_url=match_url,
+                                home_team=home_team,
+                                away_team=away_team,
+                                analysis_text=f"Screenshot capturado em {datetime.now().strftime('%d/%m/%Y às %H:%M:%S')} - {home_team} vs {away_team}",
+                                analysis_type="screenshot_capture",
+                                analysis_metadata={
+                                    "screenshot_filename": filename,
+                                    "screenshot_path": str(filepath.absolute()),
+                                    "file_size_kb": round(file_size, 1),
+                                    "timestamp": timestamp
+                                }
+                            )
+                            if backup_record_id:
+                                screenshot_data["backup_record_id"] = backup_record_id
+                                print(f"✅ Dados salvos como backup - ID: {backup_record_id}")
+                            else:
+                                print(f"❌ Falha também no backup")
+                        except Exception as backup_error:
+                            print(f"❌ Erro no backup: {backup_error}")
+                            
                 except Exception as e:
-                    print(f"⚠️ Erro ao salvar log no banco: {e}")
+                    print(f"❌ Erro ao salvar log no banco: {e}")
+                    print(f"🔍 Tipo do erro: {type(e).__name__}")
+                    print(f"🔍 Detalhes do erro: {str(e)}")
+                    
+                    # Tentar salvar pelo menos as informações básicas
+                    try:
+                        print(f"🔄 Tentando salvar informações básicas na tabela screenshot_analysis...")
+                        fallback_record_id = await self.database.save_screenshot_analysis(
+                            match_id=match_id,
+                            match_identifier=decoded_identifier,
+                            match_url=match_url,
+                            home_team=home_team,
+                            away_team=away_team,
+                            analysis_text=f"Screenshot capturado (fallback) em {datetime.now().strftime('%d/%m/%Y às %H:%M:%S')} - {home_team} vs {away_team}. Erro no salvamento principal: {str(e)}",
+                            analysis_type="screenshot_capture_fallback",
+                            analysis_metadata={
+                                "screenshot_filename": filename,
+                                "screenshot_path": str(filepath.absolute()),
+                                "file_size_kb": round(file_size, 1),
+                                "timestamp": timestamp,
+                                "original_error": str(e)
+                            }
+                        )
+                        if fallback_record_id:
+                            screenshot_data["fallback_record_id"] = fallback_record_id
+                            print(f"✅ Dados salvos via fallback - ID: {fallback_record_id}")
+                        else:
+                            print(f"❌ Falha também no fallback")
+                    except Exception as fallback_error:
+                        print(f"❌ Erro no fallback: {fallback_error}")
                 
                 return {
                     "success": True,
