@@ -1300,8 +1300,6 @@ class ScreenshotAnalysisService:
     
     def __init__(self):
         self.assistant = None
-        self.screenshots_dir = Path("screenshots")
-        self.screenshots_dir.mkdir(exist_ok=True, mode=0o775)
         
         if TechnicalAssistant:
             try:
@@ -1359,21 +1357,13 @@ class ScreenshotAnalysisService:
                         type='png'
                     )
                     
-                    # Salvar screenshot temporariamente para análise
-                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                    temp_filename = f"temp_analysis_{match_id}_{timestamp}.png"
-                    temp_filepath = self.screenshots_dir / temp_filename
+                    print(f"✅ Screenshot capturado em memória: {len(screenshot_bytes)} bytes")
                     
-                    with open(temp_filepath, 'wb') as f:
-                        f.write(screenshot_bytes)
-                    
-                    print(f"✅ Screenshot capturado: {temp_filepath.name}")
-                    
-                    # Analisar screenshot usando IA
+                    # Analisar screenshot usando IA (direto da memória)
                     if self.assistant:
                         print("🤖 Analisando screenshot com IA especializada...")
                         analysis_text, extracted_info = await self._analyze_screenshot_with_ai(
-                            temp_filepath, match_id, match_url, decoded_identifier
+                            screenshot_bytes, match_id, match_url, decoded_identifier
                         )
                     else:
                         print("⚠️ IA não disponível, gerando análise básica...")
@@ -1393,10 +1383,9 @@ class ScreenshotAnalysisService:
                             "match_url": match_url
                         },
                         "screenshot_info": {
-                            "filename": temp_filename,
-                            "filepath": str(temp_filepath.absolute()),
+                            "size_bytes": len(screenshot_bytes),
                             "file_size_kb": round(len(screenshot_bytes) / 1024, 1),
-                            "analysis_method": "visual_interpretation"
+                            "analysis_method": "visual_interpretation_memory"
                         },
                         "visual_analysis_data": extracted_info,
                         "analysis_text": analysis_text,
@@ -1416,7 +1405,8 @@ class ScreenshotAnalysisService:
                         analysis_type="visual_screenshot_analysis",
                         analysis_metadata={
                             "screenshot_info": analysis_result["screenshot_info"],
-                            "visual_data": extracted_info
+                            "visual_data": extracted_info,
+                            "processing_method": "memory_only"
                         }
                     )
                     
@@ -1424,12 +1414,8 @@ class ScreenshotAnalysisService:
                         analysis_result["analysis_record_id"] = analysis_record_id
                         print(f"💾 Análise salva no banco com ID: {analysis_record_id}")
                     
-                    # Limpar arquivo temporário
-                    try:
-                        temp_filepath.unlink()
-                        print(f"🗑️ Arquivo temporário removido: {temp_filename}")
-                    except:
-                        print(f"⚠️ Não foi possível remover arquivo temporário: {temp_filename}")
+                    # Não há arquivo temporário para limpar - tudo em memória
+                    print("🗑️ Screenshot processado em memória - nenhum arquivo temporário criado")
                     
                     return {
                         "success": True,
@@ -1438,7 +1424,7 @@ class ScreenshotAnalysisService:
                         "screenshot_data": {
                             "captured": True,
                             "size_kb": round(len(screenshot_bytes) / 1024, 1),
-                            "analysis_method": "visual_interpretation"
+                            "analysis_method": "visual_interpretation_memory"
                         },
                         "timestamp": datetime.now()
                     }
@@ -1455,14 +1441,13 @@ class ScreenshotAnalysisService:
                 "timestamp": datetime.now()
             }
     
-    async def _analyze_screenshot_with_ai(self, screenshot_path, match_id, match_url, match_identifier):
-        """Analisa screenshot usando IA para interpretação visual"""
+    async def _analyze_screenshot_with_ai(self, screenshot_bytes, match_id, match_url, match_identifier):
+        """Analisa screenshot usando IA para interpretação visual (direto da memória)"""
         try:
             import base64
             
-            # Converter screenshot para base64
-            with open(screenshot_path, 'rb') as image_file:
-                image_base64 = base64.b64encode(image_file.read()).decode('utf-8')
+            # Converter screenshot bytes para base64
+            image_base64 = base64.b64encode(screenshot_bytes).decode('utf-8')
             
             # Preparar prompt especializado para análise visual
             visual_analysis_prompt = f"""
