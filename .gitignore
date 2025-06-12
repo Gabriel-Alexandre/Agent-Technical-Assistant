@@ -7,3 +7,22 @@ Scrapper/live_data_simplify
 __pycache__/
 Scrapper/important_scripts/prints-matchs
 Scrapper/important_scripts/links
+
+# Dependências do projeto web
+web/node_modules/
+web/.next/
+web/out/
+
+# Arquivos de ambiente do projeto web
+web/.env.local
+web/.env.development.local
+web/.env.production.local
+
+# Logs do projeto web
+web/npm-debug.log*
+web/yarn-debug.log*
+web/yarn-error.log*
+
+# Cache e builds
+web/.vercel
+web/.turbo
