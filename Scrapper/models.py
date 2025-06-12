@@ -118,6 +118,14 @@ class LinksCollectionResponse(BaseModel):
     data: Optional[Dict[str, Any]] = None
     timestamp: datetime
 
+class LatestLinksResponse(BaseModel):
+    """Modelo para resposta da coleta de links mais recente"""
+    success: bool
+    message: str
+    data: Optional[Dict[str, Any]] = None
+    collection_info: Optional[Dict[str, Any]] = None
+    timestamp: datetime
+
 class ScreenshotRequest(BaseModel):
     """Modelo para requisição de screenshot"""
     match_identifier: str = Field(..., description="Identificador da partida (ID, URL ou slug)")

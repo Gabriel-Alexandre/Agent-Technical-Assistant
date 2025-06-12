@@ -897,6 +897,75 @@ class SofaScoreLinksService:
         except:
             return None
 
+    async def get_latest_links_collection(self) -> Dict[str, Any]:
+        """Busca a coleta de links mais recente do banco de dados"""
+        try:
+            print("🔍 Buscando coleta de links mais recente...")
+            
+            # Buscar a coleta mais recente
+            latest_collection = await self.database.get_latest_filtered_links()
+            
+            if not latest_collection:
+                return {
+                    "success": False,
+                    "message": "Nenhuma coleta de links encontrada no banco de dados",
+                    "data": None,
+                    "collection_info": None,
+                    "timestamp": datetime.now()
+                }
+            
+            # Extrair informações da coleta
+            collection_info = {
+                "id": latest_collection.get("id"),
+                "collection_timestamp": latest_collection.get("collection_timestamp"),
+                "source_file": latest_collection.get("source_file"),
+                "pattern_used": latest_collection.get("pattern_used"),
+                "total_links": latest_collection.get("total_links"),
+                "created_at": latest_collection.get("created_at"),
+                "updated_at": latest_collection.get("updated_at")
+            }
+            
+            # Extrair links filtrados
+            links_data = latest_collection.get("links_data", {})
+            filtered_links = links_data.get("filtered_links", [])
+            
+            # Estatísticas dos links
+            stats = {
+                "total_filtered_links": len(filtered_links),
+                "unique_match_ids": len(set(link.get("match_id") for link in filtered_links if link.get("match_id"))),
+                "links_with_text": len([link for link in filtered_links if link.get("text", "").strip()]),
+                "links_with_title": len([link for link in filtered_links if link.get("title", "").strip()])
+            }
+            
+            print(f"✅ Coleta mais recente encontrada:")
+            print(f"   - ID: {collection_info['id']}")
+            print(f"   - Coletado em: {collection_info['collection_timestamp']}")
+            print(f"   - Total de links: {collection_info['total_links']}")
+            print(f"   - Links filtrados: {stats['total_filtered_links']}")
+            print(f"   - Match IDs únicos: {stats['unique_match_ids']}")
+            
+            return {
+                "success": True,
+                "message": f"Coleta mais recente encontrada com {stats['total_filtered_links']} links filtrados",
+                "data": {
+                    "filtered_links": filtered_links,
+                    "statistics": stats,
+                    "sample_links": filtered_links[:5] if filtered_links else []  # Primeiros 5 como amostra
+                },
+                "collection_info": collection_info,
+                "timestamp": datetime.now()
+            }
+            
+        except Exception as e:
+            print(f"❌ Erro ao buscar coleta mais recente: {e}")
+            return {
+                "success": False,
+                "message": f"Erro ao buscar coleta mais recente: {str(e)}",
+                "data": None,
+                "collection_info": None,
+                "timestamp": datetime.now()
+            }
+
 class SofaScoreScreenshotService:
     """Serviço para captura de screenshots de partidas"""
     

@@ -33,6 +33,7 @@ from models import (
     AnalysisResponse, 
     ErrorResponse,
     LinksCollectionResponse,
+    LatestLinksResponse,
     ScreenshotRequest,
     ScreenshotResponse,
     ScreenshotAnalysisRequest,
@@ -75,6 +76,7 @@ app = FastAPI(
 
     ### Funcionalidades Ativas:
     - 🔗 **Coleta de Links**: Busca links de partidas na homepage do SofaScore
+    - 📋 **Links Recentes**: Recupera a coleta de links mais recente do banco
     - 📸 **Screenshots**: Captura imagens das páginas de partidas
     - 🔍 **Análise Visual**: Análise técnica baseada em screenshots
 
@@ -86,9 +88,10 @@ app = FastAPI(
 
     ### Como usar (Rotas Ativas):
     1. **Coletar Links**: `POST /sofascore/collect-links`
-    2. **Screenshot**: `POST /match/{match_identifier}/screenshot`
-    3. **Análise Visual**: `POST /match/{match_identifier}/screenshot-analysis`
-    4. **Consultar Análises**: `GET /match/{match_id}/screenshot-analyses`
+    2. **Links Recentes**: `GET /sofascore/latest-links`
+    3. **Screenshot**: `POST /match/{match_identifier}/screenshot`
+    4. **Análise Visual**: `POST /match/{match_identifier}/screenshot-analysis`
+    5. **Consultar Análises**: `GET /match/{match_id}/screenshot-analyses`
 
     ### Banco de Dados:
     - Todos os dados são salvos no Supabase
@@ -132,6 +135,7 @@ async def root():
         "timestamp": datetime.now(),
         "active_endpoints": {
             "collect_links": "/sofascore/collect-links",
+            "latest_links": "/sofascore/latest-links",
             "screenshot": "/match/{match_identifier}/screenshot",
             "screenshot_analysis": "/match/{match_identifier}/screenshot-analysis",
             "list_analyses": "/match/{match_id}/screenshot-analyses",
@@ -144,6 +148,8 @@ async def root():
             "history": "/match/{match_id}/history [DESABILITADA]"
         },
         "system_status": {
+            "links_collection": "✅ Funcionais",
+            "latest_links": "✅ Funcionais",
             "screenshots": "✅ Funcionais",
             "visual_analysis": "✅ Funcionais", 
             "data_collection": "⚠️ Em manutenção",
@@ -464,6 +470,51 @@ async def collect_sofascore_links():
         raise HTTPException(
             status_code=500,
             detail=f"Erro interno na coleta de links: {str(e)}"
+        )
+
+@app.get("/sofascore/latest-links",
+         response_model=LatestLinksResponse,
+         tags=["Coleta de Links"],
+         summary="Obter Coleta de Links Mais Recente",
+         description="""
+         Retorna a coleta de links mais recente armazenada no banco de dados.
+         
+         **Retorna:**
+         - Links filtrados da coleta mais recente
+         - Informações da coleta (timestamp, padrão usado, etc.)
+         - Estatísticas dos links (total, match IDs únicos, etc.)
+         - Amostra dos primeiros 5 links
+         
+         **Dados incluídos:**
+         - Lista completa de links filtrados
+         - Estatísticas da coleta
+         - Metadados da coleta (ID, timestamp, padrão regex)
+         - Amostra de links para visualização rápida
+         
+         **Uso recomendado:** Para verificar a última coleta sem executar uma nova busca.
+         """)
+async def get_latest_sofascore_links():
+    """Rota GET: Buscar a coleta de links mais recente do banco de dados"""
+    try:
+        print("🔍 Buscando coleta de links mais recente...")
+        
+        # Buscar coleta mais recente
+        result = await links_service.get_latest_links_collection()
+        
+        if result["success"]:
+            return LatestLinksResponse(**result)
+        else:
+            raise HTTPException(
+                status_code=404 if "Nenhuma coleta" in result["message"] else 500,
+                detail=result["message"]
+            )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro interno ao buscar coleta mais recente: {str(e)}"
         )
 
 @app.post("/match/{match_identifier:path}/screenshot",
