@@ -17,6 +17,7 @@ services:
       - ./live_data_simplify:/app/live_data_simplify
       - ./analysis:/app/analysis
       - ./logs:/app/logs
+      - ./screenshots:/app/screenshots
     restart: unless-stopped
     # Configurações necessárias para Playwright no Docker
     shm_size: 2gb

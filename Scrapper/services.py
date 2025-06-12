@@ -661,7 +661,7 @@ class SofaScoreLinksService:
                 
                 # Acessar página inicial em português
                 homepage_url = "https://www.sofascore.com/pt/"
-                response = await page.goto(homepage_url, timeout=15000)
+                response = await page.goto(homepage_url, timeout=90000)
                 
                 if response.status != 200:
                     print(f"❌ Erro ao acessar página inicial: Status {response.status}")
@@ -769,12 +769,17 @@ class SofaScoreLinksService:
                     
                     # Verificar se a URL termina com o padrão desejado
                     if re.search(pattern, url):
+                        # Processar href_original para remover /pt/football/match/
+                        href_original = link.get('href_original', '')
+                        if href_original.startswith('/pt/football/match/'):
+                            href_original = href_original.replace('/pt/football/match/', '')
+                        
                         filtered_links.append({
                             'url': url,
                             'text': link.get('text', ''),
                             'title': link.get('title', ''),
                             'match_id': self.extract_match_id_from_url(url),
-                            'href_original': link.get('href_original', '')
+                            'href_original': href_original
                         })
                 
                 print(f"✅ Links encontrados com o padrão: {len(filtered_links)}")
@@ -1295,28 +1300,30 @@ class ScreenshotAnalysisService:
     
     def __init__(self):
         self.assistant = None
+        self.screenshots_dir = Path("screenshots")
+        self.screenshots_dir.mkdir(exist_ok=True, mode=0o775)
+        
         if TechnicalAssistant:
             try:
                 self.assistant = TechnicalAssistant()
-                print("🤖 Assistente técnico inicializado para análise de screenshots!")
+                print("🤖 Assistente técnico inicializado para análise visual de screenshots!")
             except Exception as e:
                 print(f"⚠️ Assistente técnico não disponível: {e}")
     
     async def analyze_match_from_screenshot(self, match_identifier: str) -> Dict[str, Any]:
-        """Analisa uma partida baseada no contexto da página (sem salvar screenshot)"""
+        """Analisa uma partida baseada exclusivamente na interpretação visual do screenshot"""
         try:
             # Decodificar URL se necessário
             decoded_identifier = unquote(match_identifier)
             
-            # Acessar a página para obter contexto (sem salvar screenshot)
+            # Acessar a página e capturar screenshot
             async with async_playwright() as playwright:
-                # Usar o mesmo serviço de screenshot mas sem salvar
                 screenshot_service = SofaScoreScreenshotService()
                 browser, context = await screenshot_service.create_browser_context(playwright)
                 page = await context.new_page()
                 
                 try:
-                    print(f"🔄 Acessando página da partida para análise: {decoded_identifier}...")
+                    print(f"🔄 Acessando página da partida para captura de screenshot: {decoded_identifier}...")
                     
                     # Construir URL da partida
                     match_url = screenshot_service.build_match_url(decoded_identifier)
@@ -1330,7 +1337,7 @@ class ScreenshotAnalysisService:
                         raise Exception(f"Erro ao acessar página: Status {response.status}")
                     
                     print("✅ Página carregada com sucesso!")
-                    await asyncio.sleep(3)
+                    await asyncio.sleep(5)  # Aguardar carregamento completo dos gráficos
                     
                     # Aceitar cookies se aparecer o banner
                     try:
@@ -1338,114 +1345,62 @@ class ScreenshotAnalysisService:
                         if await cookie_button.count() > 0:
                             await cookie_button.first.click()
                             print("🍪 Cookies aceitos")
-                            await asyncio.sleep(1)
+                            await asyncio.sleep(2)
                     except:
                         pass
                     
-                    # Obter informações da partida
-                    try:
-                        home_team_element = page.locator('[data-testid="match_header_team_home"] .team-name, .home-team .team-name')
-                        away_team_element = page.locator('[data-testid="match_header_team_away"] .team-name, .away-team .team-name')
-                        
-                        home_team = "Home"
-                        away_team = "Away"
-                        
-                        if await home_team_element.count() > 0:
-                            home_team = await home_team_element.first.text_content()
-                            home_team = home_team.strip() if home_team else "Home"
-                        
-                        if await away_team_element.count() > 0:
-                            away_team = await away_team_element.first.text_content()
-                            away_team = away_team.strip() if away_team else "Away"
-                        
-                        home_team = "".join(c for c in home_team if c.isalnum() or c in (' ', '-', '_')).strip()
-                        away_team = "".join(c for c in away_team if c.isalnum() or c in (' ', '-', '_')).strip()
-                        
-                        print(f"⚽ Partida: {home_team} vs {away_team}")
-                        
-                    except Exception as e:
-                        print(f"⚠️ Não foi possível obter nomes dos times: {e}")
-                        home_team = "Home"
-                        away_team = "Away"
-                    
-                    # Extrair match_id
+                    # Extrair apenas informações básicas para identificação
                     match_id = screenshot_service.extract_match_id_from_identifier(decoded_identifier)
                     
-                    print("🤖 Gerando análise técnica baseada no contexto da partida...")
+                    # Capturar screenshot da página completa
+                    print("📸 Capturando screenshot da página completa...")
+                    screenshot_bytes = await page.screenshot(
+                        full_page=True,
+                        type='png'
+                    )
                     
-                    # Preparar contexto para análise
-                    analysis_context = {
-                        "match_info": {
-                            "home_team": home_team,
-                            "away_team": away_team,
-                            "match_id": match_id,
-                            "match_url": match_url
-                        },
-                        "page_info": {
-                            "accessed_at": datetime.now().isoformat(),
-                            "status": "page_accessed_successfully"
+                    # Salvar screenshot temporariamente para análise
+                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                    temp_filename = f"temp_analysis_{match_id}_{timestamp}.png"
+                    temp_filepath = self.screenshots_dir / temp_filename
+                    
+                    with open(temp_filepath, 'wb') as f:
+                        f.write(screenshot_bytes)
+                    
+                    print(f"✅ Screenshot capturado: {temp_filepath.name}")
+                    
+                    # Analisar screenshot usando IA
+                    if self.assistant:
+                        print("🤖 Analisando screenshot com IA especializada...")
+                        analysis_text, extracted_info = await self._analyze_screenshot_with_ai(
+                            temp_filepath, match_id, match_url, decoded_identifier
+                        )
+                    else:
+                        print("⚠️ IA não disponível, gerando análise básica...")
+                        analysis_text = self._generate_basic_screenshot_analysis(match_id, match_url)
+                        extracted_info = {
+                            "home_team": "Time Casa",
+                            "away_team": "Time Visitante",
+                            "analysis_method": "basic_without_ai"
                         }
-                    }
-                    
-                    # Gerar análise técnica usando IA (simulado por enquanto)
-                    analysis_text = f"""
-## Análise Técnica - {home_team} vs {away_team}
-
-### 📊 Situação Atual
-- **Partida**: {home_team} vs {away_team}
-- **Match ID**: {match_id}
-- **Análise realizada**: {datetime.now().strftime('%d/%m/%Y às %H:%M:%S')}
-- **Página acessada**: {match_url}
-
-### 🎯 Análise Baseada no Contexto da Página
-- Página da partida acessada com sucesso
-- Informações dos times extraídas da interface
-- Análise gerada com base no contexto atual da partida
-
-### ⚽ Contexto Tático
-Com base no acesso à página da partida:
-- Situação atual do placar e tempo de jogo
-- Formações táticas disponíveis na interface
-- Estatísticas visíveis no momento do acesso
-- Timeline de eventos importantes
-
-### 🔍 Recomendações Técnicas
-
-**Para {home_team}:**
-- Manter intensidade no jogo em casa
-- Aproveitar apoio da torcida
-- Pressionar nos momentos-chave
-- Explorar as laterais do campo
-
-**Para {away_team}:**
-- Manter organização defensiva
-- Buscar contra-ataques eficientes
-- Gerenciar bem os tempos de jogo
-- Aproveitar jogadas de bola parada
-
-### ⚠️ Alertas Críticos
-- Monitorar mudanças táticas em tempo real
-- Atenção a cartões e possíveis expulsões
-- Gestão de substituições nos momentos adequados
-- Controle do ritmo de jogo
-
-### 📈 Previsão Tática
-- Jogo equilibrado com oportunidades para ambos os lados
-- Importância das jogadas de bola parada
-- Decisão pode vir nos detalhes táticos
-- Momento crucial para mudanças estratégicas
-
----
-*Análise gerada automaticamente com base no contexto da partida*
-*Baseada em acesso direto à página sem captura de screenshot*
-"""
                     
                     # Preparar resultado da análise
                     analysis_result = {
-                        "match_info": analysis_context["match_info"],
-                        "page_info": analysis_context["page_info"],
+                        "match_info": {
+                            "home_team": extracted_info.get("home_team", "Time Casa"),
+                            "away_team": extracted_info.get("away_team", "Time Visitante"),
+                            "match_id": match_id,
+                            "match_url": match_url
+                        },
+                        "screenshot_info": {
+                            "filename": temp_filename,
+                            "filepath": str(temp_filepath.absolute()),
+                            "file_size_kb": round(len(screenshot_bytes) / 1024, 1),
+                            "analysis_method": "visual_interpretation"
+                        },
+                        "visual_analysis_data": extracted_info,
                         "analysis_text": analysis_text,
-                        "analysis_type": "context_based",
+                        "analysis_type": "visual_screenshot_analysis",
                         "generated_at": datetime.now().isoformat()
                     }
                     
@@ -1455,21 +1410,36 @@ Com base no acesso à página da partida:
                         match_id=match_id,
                         match_identifier=decoded_identifier,
                         match_url=match_url,
-                        home_team=home_team,
-                        away_team=away_team,
+                        home_team=extracted_info.get("home_team", "Time Casa"),
+                        away_team=extracted_info.get("away_team", "Time Visitante"),
                         analysis_text=analysis_text,
-                        analysis_type="context_based"
+                        analysis_type="visual_screenshot_analysis",
+                        analysis_metadata={
+                            "screenshot_info": analysis_result["screenshot_info"],
+                            "visual_data": extracted_info
+                        }
                     )
                     
                     if analysis_record_id:
                         analysis_result["analysis_record_id"] = analysis_record_id
                         print(f"💾 Análise salva no banco com ID: {analysis_record_id}")
                     
+                    # Limpar arquivo temporário
+                    try:
+                        temp_filepath.unlink()
+                        print(f"🗑️ Arquivo temporário removido: {temp_filename}")
+                    except:
+                        print(f"⚠️ Não foi possível remover arquivo temporário: {temp_filename}")
+                    
                     return {
                         "success": True,
-                        "message": "Análise técnica gerada com sucesso",
+                        "message": "Análise visual do screenshot gerada com sucesso",
                         "data": analysis_result,
-                        "screenshot_data": None,  # Não há screenshot
+                        "screenshot_data": {
+                            "captured": True,
+                            "size_kb": round(len(screenshot_bytes) / 1024, 1),
+                            "analysis_method": "visual_interpretation"
+                        },
                         "timestamp": datetime.now()
                     }
                     
@@ -1479,8 +1449,156 @@ Com base no acesso à página da partida:
         except Exception as e:
             return {
                 "success": False,
-                "message": f"Erro na análise: {str(e)}",
+                "message": f"Erro na análise visual: {str(e)}",
                 "data": None,
                 "screenshot_data": None,
                 "timestamp": datetime.now()
-            } 
+            }
+    
+    async def _analyze_screenshot_with_ai(self, screenshot_path, match_id, match_url, match_identifier):
+        """Analisa screenshot usando IA para interpretação visual"""
+        try:
+            import base64
+            
+            # Converter screenshot para base64
+            with open(screenshot_path, 'rb') as image_file:
+                image_base64 = base64.b64encode(image_file.read()).decode('utf-8')
+            
+            # Preparar prompt especializado para análise visual
+            visual_analysis_prompt = f"""
+Você é um especialista em análise tática de futebol com 20 anos de experiência. Analise esta imagem de uma partida do SofaScore e forneça comentários DIRETOS, CURTOS e PRÁTICOS.
+
+INSTRUÇÕES ESPECÍFICAS:
+1. Analise APENAS o que você consegue VER na imagem
+2. Identifique os nomes dos times na imagem
+3. Observe gráficos de momentum, estatísticas, placar, tempo
+4. Faça comentários diretos e curtos (máximo 15 palavras por comentário)
+5. Use formato: "Time X está fazendo Y, faça Z"
+6. Foque em ações práticas e imediatas
+7. Analise especificamente: momentum, chutes, ataques, passes, duelos, posse de bola
+
+DADOS DA PARTIDA:
+- Match ID: {match_id}
+- URL: {match_url}
+- Identificador: {match_identifier}
+
+FORMATO DE RESPOSTA (SEJA CONCISO):
+## [Nome Time Casa] vs [Nome Time Visitante]
+
+### ⚽ [Nome Time Casa]
+• [sugestão direta - máximo 10 palavras]
+• [sugestão direta - máximo 10 palavras]
+• [sugestão direta - máximo 10 palavras]
+
+### 🏃 [Nome Time Visitante]
+• [sugestão direta - máximo 10 palavras]
+• [sugestão direta - máximo 10 palavras]
+• [sugestão direta - máximo 10 palavras]
+
+EXEMPLOS DE SUGESTÕES DIRETAS:
+• "Ataque mais pela direita"
+• "Pressione saída de bola"
+• "Finalize dentro da área"
+• "Mantenha posse de bola"
+• "Intensifique marcação"
+
+IMPORTANTE: Extraia também as seguintes informações em formato JSON no final:
+```json
+{{
+  "home_team": "Nome do time da casa extraído da imagem",
+  "away_team": "Nome do time visitante extraído da imagem",
+  "score_home": "Gols do time da casa (se visível)",
+  "score_away": "Gols do time visitante (se visível)",
+  "match_time": "Tempo de jogo (se visível)",
+  "match_status": "Status da partida (se visível)",
+  "possession_home": "Posse de bola time casa (se visível)",
+  "possession_away": "Posse de bola time visitante (se visível)",
+  "visible_stats": ["lista de estatísticas visíveis na imagem"]
+}}
+```
+"""
+            
+            # Usar o assistente técnico para análise visual
+            if hasattr(self.assistant, 'analyze_image_with_prompt'):
+                # Se o assistente suporta análise de imagem
+                analysis_response = self.assistant.analyze_image_with_prompt(visual_analysis_prompt, image_base64)
+            else:
+                # Fallback: usar análise de texto com descrição da imagem
+                analysis_response = self.assistant.analyze_match_with_prompt(visual_analysis_prompt)
+            
+            if analysis_response:
+                # Tentar extrair informações JSON do final da resposta
+                extracted_info = self._extract_info_from_analysis(analysis_response)
+                return analysis_response, extracted_info
+            else:
+                return self._generate_basic_screenshot_analysis(match_id, match_url), {
+                    "home_team": "Time Casa",
+                    "away_team": "Time Visitante",
+                    "analysis_method": "ai_fallback"
+                }
+                
+        except Exception as e:
+            print(f"⚠️ Erro na análise visual com IA: {e}")
+            return self._generate_basic_screenshot_analysis(match_id, match_url), {
+                "home_team": "Time Casa",
+                "away_team": "Time Visitante",
+                "analysis_method": "error_fallback",
+                "error": str(e)
+            }
+    
+    def _extract_info_from_analysis(self, analysis_text):
+        """Extrai informações estruturadas da análise"""
+        try:
+            import json
+            import re
+            
+            # Procurar por JSON na resposta
+            json_match = re.search(r'```json\s*(\{.*?\})\s*```', analysis_text, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(1)
+                extracted_data = json.loads(json_str)
+                return extracted_data
+            
+            # Fallback: tentar extrair nomes dos times do título da análise
+            title_match = re.search(r'ANÁLISE TÁTICA VISUAL - (.+?) vs (.+?)(?:\n|$)', analysis_text)
+            if title_match:
+                return {
+                    "home_team": title_match.group(1).strip(),
+                    "away_team": title_match.group(2).strip(),
+                    "analysis_method": "title_extraction"
+                }
+            
+            return {
+                "home_team": "Time Casa",
+                "away_team": "Time Visitante",
+                "analysis_method": "no_extraction"
+            }
+            
+        except Exception as e:
+            print(f"⚠️ Erro ao extrair informações: {e}")
+            return {
+                "home_team": "Time Casa",
+                "away_team": "Time Visitante",
+                "analysis_method": "extraction_error",
+                "error": str(e)
+            }
+    
+    def _generate_basic_screenshot_analysis(self, match_id, match_url):
+        """Gera análise básica e concisa quando IA não está disponível"""
+        
+        analysis_parts = []
+        analysis_parts.append(f"## Time Casa vs Time Visitante")
+        
+        # Sugestões diretas para time da casa
+        analysis_parts.append(f"\n### ⚽ Time Casa")
+        analysis_parts.append("• Intensifique ataques pelas laterais")
+        analysis_parts.append("• Pressione saída de bola")
+        analysis_parts.append("• Finalize mais dentro da área")
+        
+        # Sugestões diretas para time visitante
+        analysis_parts.append(f"\n### 🏃 Time Visitante")
+        analysis_parts.append("• Mantenha organização defensiva")
+        analysis_parts.append("• Busque contra-ataques rápidos")
+        analysis_parts.append("• Intensifique marcação no meio")
+        
+        return "\n".join(analysis_parts) 

@@ -68,7 +68,7 @@ COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Criar diretórios necessários
-RUN mkdir -p data live_data live_data_simplify analysis logs
+RUN mkdir -p data live_data live_data_simplify analysis logs screenshots
 
 # Criar usuário não-root para segurança
 RUN adduser --disabled-password --gecos '' appuser && \
@@ -79,7 +79,8 @@ RUN adduser --disabled-password --gecos '' appuser && \
     chmod -R 775 /app/live_data && \
     chmod -R 775 /app/live_data_simplify && \
     chmod -R 775 /app/analysis && \
-    chmod -R 775 /app/logs
+    chmod -R 775 /app/logs && \
+    chmod -R 775 /app/screenshots
 
 USER appuser
 

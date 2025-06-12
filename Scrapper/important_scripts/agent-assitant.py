@@ -172,6 +172,84 @@ Você é um **Assistente Técnico de Elite** com 20+ anos de experiência em an�
             print(f"❌ Erro na análise: {e}")
             return None
     
+    def analyze_match_with_prompt(self, custom_prompt):
+        """Realiza análise tática usando prompt personalizado"""
+        try:
+            print("🤖 Iniciando análise tática com prompt personalizado...")
+            
+            # Fazer chamada para GPT-4o-mini com prompt personalizado
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "system", 
+                        "content": "Você é um especialista em análise tática de futebol com 20 anos de experiência. Forneça análises diretas, práticas e específicas baseadas nos dados fornecidos."
+                    },
+                    {
+                        "role": "user", 
+                        "content": custom_prompt
+                    }
+                ],
+                temperature=0.2,  # Temperatura ainda mais baixa para análises diretas
+                max_tokens=1500,
+                top_p=0.8
+            )
+            
+            analysis = response.choices[0].message.content
+            
+            print("✅ Análise personalizada concluída!")
+            return analysis
+            
+        except Exception as e:
+            print(f"❌ Erro na análise personalizada: {e}")
+            return None
+    
+    def analyze_image_with_prompt(self, custom_prompt, image_base64):
+        """Realiza análise tática visual usando imagem"""
+        try:
+            print("🤖 Iniciando análise tática visual com imagem...")
+            
+            # Fazer chamada para GPT-4o-mini com análise de imagem
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",  # Modelo que suporta visão
+                messages=[
+                    {
+                        "role": "system", 
+                        "content": "Você é um especialista em análise tática de futebol com 20 anos de experiência. Analise a imagem fornecida e forneça análises diretas, práticas e específicas baseadas no que consegue ver."
+                    },
+                    {
+                        "role": "user", 
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": custom_prompt
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/png;base64,{image_base64}",
+                                    "detail": "high"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                temperature=0.2,
+                max_tokens=2000,
+                top_p=0.8
+            )
+            
+            analysis = response.choices[0].message.content
+            
+            print("✅ Análise visual concluída!")
+            return analysis
+            
+        except Exception as e:
+            print(f"❌ Erro na análise visual: {e}")
+            # Fallback para análise sem imagem
+            print("🔄 Tentando análise sem imagem como fallback...")
+            return self.analyze_match_with_prompt(custom_prompt)
+    
     def save_analysis(self, analysis, original_file_path):
         """Salva análise em arquivo"""
         if not analysis:
