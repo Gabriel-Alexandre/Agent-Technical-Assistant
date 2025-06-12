@@ -44,144 +44,172 @@ class MatchDataService:
         if TechnicalAssistant:
             try:
                 self.assistant = TechnicalAssistant()
-                print("🤖 Assistente técnico inicializado!")
             except Exception as e:
                 print(f"⚠️ Assistente técnico não disponível: {e}")
         else:
             print("⚠️ TechnicalAssistant não foi importado corretamente")
     
     async def get_full_match_data(self, match_id: str) -> Dict[str, Any]:
-        """Coleta dados completos da partida do SofaScore"""
-        try:
-            print(f"🔄 Coletando dados completos para partida {match_id}")
-            
-            # Usar o coletor existente adaptado
-            collector = SofaScoreLiveCollectorAPI()
-            match_data = await collector.get_live_match_data_api(match_id)
-            
-            if not match_data:
-                raise Exception("Falha na coleta de dados do SofaScore")
-            
-            # Salvar no banco de dados
-            record_id = await self.database.save_match_data(
-                match_id=match_id,
-                full_data=match_data
-            )
-            
-            return {
-                "success": True,
-                "message": "Dados coletados com sucesso",
-                "data": match_data,
-                "record_id": record_id,
-                "timestamp": datetime.now()
-            }
-            
-        except Exception as e:
-            return {
-                "success": False,
-                "message": f"Erro na coleta de dados: {str(e)}",
-                "data": None,
-                "record_id": None,
-                "timestamp": datetime.now()
-            }
+        """Coleta dados completos da partida do SofaScore - MÉTODO DESABILITADO"""
+        return {
+            "success": False,
+            "message": "Método temporariamente desabilitado para manutenção. Use os métodos de screenshot para análise de partidas.",
+            "data": None,
+            "record_id": None,
+            "timestamp": datetime.now()
+        }
+        
+        # Código original comentado para manutenção
+        # try:
+        #     print(f"🔄 Coletando dados completos para partida {match_id}")
+        #     
+        #     # Usar o coletor existente adaptado
+        #     collector = SofaScoreLiveCollectorAPI()
+        #     match_data = await collector.get_live_match_data_api(match_id)
+        #     
+        #     if not match_data:
+        #         raise Exception("Falha na coleta de dados do SofaScore")
+        #     
+        #     # Salvar no banco de dados
+        #     record_id = await self.database.save_match_data(
+        #         match_id=match_id,
+        #         full_data=match_data
+        #     )
+        #     
+        #     return {
+        #         "success": True,
+        #         "message": "Dados coletados com sucesso",
+        #         "data": match_data,
+        #         "record_id": record_id,
+        #         "timestamp": datetime.now()
+        #     }
+        #     
+        # except Exception as e:
+        #     return {
+        #         "success": False,
+        #         "message": f"Erro na coleta de dados: {str(e)}",
+        #         "data": None,
+        #         "record_id": None,
+        #         "timestamp": datetime.now()
+        #     }
     
     async def get_simplified_match_data(self, match_id: str) -> Dict[str, Any]:
-        """Coleta e simplifica dados da partida"""
-        try:
-            print(f"🔄 Coletando e simplificando dados para partida {match_id}")
-            
-            # Coletar dados completos
-            collector = SofaScoreLiveCollectorAPI()
-            full_data = await collector.get_live_match_data_api(match_id)
-            
-            if not full_data:
-                raise Exception("Falha na coleta de dados do SofaScore")
-            
-            # Simplificar dados
-            simplified_data = self.simplifier.simplify_raw_data(full_data)
-            
-            if not simplified_data:
-                raise Exception("Falha na simplificação dos dados")
-            
-            # Salvar no banco
-            record_id = await self.database.save_match_data(
-                match_id=match_id,
-                full_data=full_data,
-                simplified_data=simplified_data
-            )
-            
-            return {
-                "success": True,
-                "message": "Dados simplificados com sucesso",
-                "data": simplified_data,
-                "record_id": record_id,
-                "timestamp": datetime.now()
-            }
-            
-        except Exception as e:
-            return {
-                "success": False,
-                "message": f"Erro na simplificação: {str(e)}",
-                "data": None,
-                "record_id": None,
-                "timestamp": datetime.now()
-            }
+        """Coleta e simplifica dados da partida - MÉTODO DESABILITADO"""
+        return {
+            "success": False,
+            "message": "Método temporariamente desabilitado para manutenção. Use os métodos de screenshot para análise de partidas.",
+            "data": None,
+            "record_id": None,
+            "timestamp": datetime.now()
+        }
+        
+        # Código original comentado para manutenção
+        # try:
+        #     print(f"🔄 Coletando e simplificando dados para partida {match_id}")
+        #     
+        #     # Coletar dados completos
+        #     collector = SofaScoreLiveCollectorAPI()
+        #     full_data = await collector.get_live_match_data_api(match_id)
+        #     
+        #     if not full_data:
+        #         raise Exception("Falha na coleta de dados do SofaScore")
+        #     
+        #     # Simplificar dados
+        #     simplified_data = self.simplifier.simplify_raw_data(full_data)
+        #     
+        #     if not simplified_data:
+        #         raise Exception("Falha na simplificação dos dados")
+        #     
+        #     # Salvar no banco
+        #     record_id = await self.database.save_match_data(
+        #         match_id=match_id,
+        #         full_data=full_data,
+        #         simplified_data=simplified_data
+        #     )
+        #     
+        #     return {
+        #         "success": True,
+        #         "message": "Dados simplificados com sucesso",
+        #         "data": simplified_data,
+        #         "record_id": record_id,
+        #         "timestamp": datetime.now()
+        #     }
+        #     
+        # except Exception as e:
+        #     return {
+        #         "success": False,
+        #         "message": f"Erro na simplificação: {str(e)}",
+        #         "data": None,
+        #         "record_id": None,
+        #         "timestamp": datetime.now()
+        #     }
     
     async def get_match_analysis(self, match_id: str) -> Dict[str, Any]:
-        """Coleta dados, simplifica e gera análise técnica"""
-        try:
-            print(f"🔄 Iniciando análise completa para partida {match_id}")
-            
-            if not self.assistant:
-                raise Exception("Assistente técnico não disponível - configure OPENAI_API_KEY")
-            
-            # Coletar dados completos
-            collector = SofaScoreLiveCollectorAPI()
-            full_data = await collector.get_live_match_data_api(match_id)
-            
-            if not full_data:
-                raise Exception("Falha na coleta de dados do SofaScore")
-            
-            # Simplificar dados
-            simplified_data = self.simplifier.simplify_raw_data(full_data)
-            
-            if not simplified_data:
-                raise Exception("Falha na simplificação dos dados")
-            
-            # Gerar análise técnica
-            analysis = self.assistant.analyze_match(simplified_data)
-            
-            if not analysis:
-                raise Exception("Falha na geração da análise técnica")
-            
-            # Salvar tudo no banco
-            record_id = await self.database.save_match_data(
-                match_id=match_id,
-                full_data=full_data,
-                simplified_data=simplified_data,
-                analysis=analysis
-            )
-            
-            return {
-                "success": True,
-                "message": "Análise completa realizada com sucesso",
-                "match_data": full_data,
-                "simplified_data": simplified_data,
-                "analysis": analysis,
-                "record_id": record_id,
-                "timestamp": datetime.now()
-            }
-            
-        except Exception as e:
-            return {
-                "success": False,
-                "message": f"Erro na análise: {str(e)}",
-                "match_data": None,
-                "simplified_data": None,
-                "analysis": None,
-                "record_id": None,
-                "timestamp": datetime.now()
-            }
+        """Coleta dados, simplifica e gera análise técnica - MÉTODO DESABILITADO"""
+        return {
+            "success": False,
+            "message": "Método temporariamente desabilitado para manutenção. Use o método analyze_match_from_screenshot para análise de partidas.",
+            "match_data": None,
+            "simplified_data": None,
+            "analysis": None,
+            "record_id": None,
+            "timestamp": datetime.now()
+        }
+        
+        # Código original comentado para manutenção
+        # try:
+        #     print(f"🔄 Iniciando análise completa para partida {match_id}")
+        #     
+        #     if not self.assistant:
+        #         raise Exception("Assistente técnico não disponível - configure OPENAI_API_KEY")
+        #     
+        #     # Coletar dados completos
+        #     collector = SofaScoreLiveCollectorAPI()
+        #     full_data = await collector.get_live_match_data_api(match_id)
+        #     
+        #     if not full_data:
+        #         raise Exception("Falha na coleta de dados do SofaScore")
+        #     
+        #     # Simplificar dados
+        #     simplified_data = self.simplifier.simplify_raw_data(full_data)
+        #     
+        #     if not simplified_data:
+        #         raise Exception("Falha na simplificação dos dados")
+        #     
+        #     # Gerar análise técnica
+        #     analysis = self.assistant.analyze_match(simplified_data)
+        #     
+        #     if not analysis:
+        #         raise Exception("Falha na geração da análise técnica")
+        #     
+        #     # Salvar tudo no banco
+        #     record_id = await self.database.save_match_data(
+        #         match_id=match_id,
+        #         full_data=full_data,
+        #         simplified_data=simplified_data,
+        #         analysis=analysis
+        #     )
+        #     
+        #     return {
+        #         "success": True,
+        #         "message": "Análise completa realizada com sucesso",
+        #         "match_data": full_data,
+        #         "simplified_data": simplified_data,
+        #         "analysis": analysis,
+        #         "record_id": record_id,
+        #         "timestamp": datetime.now()
+        #     }
+        #     
+        # except Exception as e:
+        #     return {
+        #         "success": False,
+        #         "message": f"Erro na análise: {str(e)}",
+        #         "match_data": None,
+        #         "simplified_data": None,
+        #         "analysis": None,
+        #         "record_id": None,
+        #         "timestamp": datetime.now()
+        #     }
 
 class SofaScoreLiveCollectorAPI(SofaScoreLiveCollector):
     """Versão adaptada do coletor para uso em API"""
@@ -364,14 +392,8 @@ class SofaScoreLiveCollectorAPI(SofaScoreLiveCollector):
         # Verificar e instalar navegadores se necessário
         # await self.ensure_playwright_browsers()  # Comentado temporariamente devido a conflito sync/async
         
-        # Verificar e exibir informações do event loop
+        # Verificar informações básicas
         import platform
-        loop = asyncio.get_running_loop()
-        print(f"🔧 Sistema: {platform.system()}")
-        print(f"🔧 Event Loop: {type(loop).__name__}")
-        print(f"🔧 Event Loop Policy: {type(asyncio.get_event_loop_policy()).__name__}")
-        print(f"🔧 Match ID: {match_id}")
-        print(f"🔧 Base URL: {self.base_url}")
         
         try:
             print(f"🚀 Iniciando Playwright para coleta de dados...")
@@ -380,35 +402,16 @@ class SofaScoreLiveCollectorAPI(SofaScoreLiveCollector):
                 browser, context = await self.create_browser_context(playwright)
                 page = await context.new_page()
                 
-                try:
-                    # Obter versão do navegador de forma segura
-                    browser_version = "Unknown"
-                    try:
-                        browser_version = await browser.version()
-                        print(f"📊 Navegador iniciado - Versão: {browser_version}")
-                    except Exception as e:
-                        print(f"📊 Navegador iniciado - Versão não disponível ({str(e)})")
-                    
-                    # Obter User Agent de forma segura  
-                    try:
-                        user_agent = await page.evaluate('() => navigator.userAgent')
-                        print(f"🌍 User Agent: {user_agent[:100]}...")
-                    except Exception as e:
-                        print(f"🌍 User Agent: Não disponível ({str(e)})")
-                    
-                except Exception as e:
-                    print(f"⚠️ Erro ao obter informações do navegador: {str(e)}")
+                # Navegador iniciado com sucesso
                 
                 try:
                     print(f"🔄 Coletando dados da partida {match_id}...")
-                    print(f"🎯 Usando estratégia otimizada baseada no teste bem-sucedido")
                     
                     match_data = {}
                     timestamp = datetime.now().isoformat()
                     collected_types = []
                     
                     # 1. Informações básicas
-                    print("📊 Coletando informações básicas...")
                     basic_info = await self.fetch_api_data(page, f"{self.base_url}event/{match_id}")
                     if basic_info:
                         match_data['basic_info'] = {
@@ -424,32 +427,23 @@ class SofaScoreLiveCollectorAPI(SofaScoreLiveCollector):
                         collected_types.append("basic_info")
                         home_team = basic_info.get('event', {}).get('homeTeam', {}).get('name', 'N/A')
                         away_team = basic_info.get('event', {}).get('awayTeam', {}).get('name', 'N/A')
-                        print(f"⚽ Partida identificada: {home_team} vs {away_team}")
+                        print(f"⚽ Partida: {home_team} vs {away_team}")
                     else:
-                        print("❌ Falha ao obter informações básicas - dados podem estar indisponíveis")
+                        print("❌ Falha ao obter informações básicas")
                     
                     # 2. Estatísticas
-                    print("📈 Coletando estatísticas...")
                     stats = await self.fetch_api_data(page, f"{self.base_url}event/{match_id}/statistics")
                     if stats:
                         match_data['statistics'] = stats.get('statistics', [])
                         collected_types.append("statistics")
-                        print(f"📊 Estatísticas coletadas: {len(match_data['statistics'])} categorias")
-                    else:
-                        print("❌ Falha ao obter estatísticas")
                     
                     # 3. Timeline
-                    print("⏱️ Coletando timeline...")
                     timeline = await self.fetch_api_data(page, f"{self.base_url}event/{match_id}/incidents")
                     if timeline:
                         match_data['timeline'] = timeline.get('incidents', [])
                         collected_types.append("timeline")
-                        print(f"📅 Timeline coletada: {len(match_data['timeline'])} eventos")
-                    else:
-                        print("❌ Falha ao obter timeline")
                     
                     # 4. Lineups
-                    print("👥 Coletando escalações...")
                     lineups = await self.fetch_api_data(page, f"{self.base_url}event/{match_id}/lineups")
                     if lineups:
                         match_data['lineups'] = {
@@ -457,31 +451,18 @@ class SofaScoreLiveCollectorAPI(SofaScoreLiveCollector):
                             'away': lineups.get('away', {})
                         }
                         collected_types.append("lineups")
-                        home_players = len(lineups.get('home', {}).get('players', []))
-                        away_players = len(lineups.get('away', {}).get('players', []))
-                        print(f"👥 Escalações coletadas: {home_players} jogadores casa, {away_players} jogadores visitante")
-                    else:
-                        print("❌ Falha ao obter escalações")
                     
                     # 5. Shotmap
-                    print("🎯 Coletando shotmap...")
                     shotmap = await self.fetch_api_data(page, f"{self.base_url}event/{match_id}/shotmap")
                     if shotmap:
                         match_data['shotmap'] = shotmap.get('shotmap', [])
                         collected_types.append("shotmap")
-                        print(f"🎯 Shotmap coletado: {len(match_data['shotmap'])} chutes")
-                    else:
-                        print("❌ Falha ao obter shotmap")
                     
                     # 6. Player statistics
-                    print("⚽ Coletando stats dos jogadores...")
                     player_stats = await self.fetch_api_data(page, f"{self.base_url}event/{match_id}/player-statistics")
                     if player_stats:
                         match_data['player_statistics'] = player_stats
                         collected_types.append("player_statistics")
-                        print(f"⚽ Stats dos jogadores coletadas")
-                    else:
-                        print("❌ Falha ao obter stats dos jogadores")
                     
                     # Adicionar metadados
                     match_data['metadata'] = {
@@ -495,24 +476,14 @@ class SofaScoreLiveCollectorAPI(SofaScoreLiveCollector):
                     print(f"✅ Dados coletados: {len(collected_types)} tipos ({', '.join(collected_types)})")
                     
                     if len(collected_types) == 0:
-                        print("⚠️ ATENÇÃO: Nenhum dado foi coletado com sucesso!")
-                        print("🔍 Possíveis causas:")
-                        print("   - Match ID inválido ou partida não encontrada")
-                        print("   - Bloqueio temporário do SofaScore")
-                        print("   - Problemas de conectividade")
-                        print("🎯 Recomendação: Aguardar alguns minutos e tentar novamente")
+                        print("⚠️ Nenhum dado foi coletado")
                     elif len(collected_types) < 6:
-                        print(f"⚠️ Coleta parcial: {len(collected_types)}/6 tipos de dados coletados")
-                        print("🎯 Alguns dados podem estar temporariamente indisponíveis")
+                        print(f"⚠️ Coleta parcial: {len(collected_types)}/6 tipos")
                     
                     return match_data
                     
                 except Exception as e:
-                    error_type = type(e).__name__
-                    print(f"❌ Erro na coleta: {error_type} - {str(e)}")
-                    print(f"🔍 Detalhes do erro:")
-                    print(f"   - Tipo: {error_type}")
-                    print(f"   - Mensagem: {str(e)}")
+                    print(f"❌ Erro na coleta: {str(e)}")
                     return None
                     
                 finally:
@@ -520,13 +491,7 @@ class SofaScoreLiveCollectorAPI(SofaScoreLiveCollector):
                     await browser.close()
         
         except Exception as e:
-            error_type = type(e).__name__
-            print(f"❌ Erro crítico do Playwright: {error_type} - {str(e)}")
-            print(f"🔍 Possíveis soluções:")
-            print(f"   - Verificar se o Playwright está instalado corretamente")
-            print(f"   - Executar: playwright install chromium")
-            print(f"   - Verificar permissões do sistema")
-            print(f"   - Verificar recursos disponíveis (memória/CPU)")
+            print(f"❌ Erro crítico do Playwright: {str(e)}")
             return None
 
     async def ensure_playwright_browsers(self):
@@ -1012,10 +977,9 @@ class SofaScoreScreenshotService:
         """Tira screenshot da página completa de uma partida seguindo exatamente o exemplo do get-print-from-match.py"""
         
         # Testar conectividade com Supabase antes de processar
-        print("🔍 Verificando conectividade com Supabase...")
         connectivity_ok = await self.database.test_connection()
         if not connectivity_ok:
-            print("⚠️ Problema de conectividade detectado, mas continuando com o processo...")
+            print("⚠️ Problema de conectividade detectado")
         
         async with async_playwright() as playwright:
             browser, context = await self.create_browser_context(playwright)

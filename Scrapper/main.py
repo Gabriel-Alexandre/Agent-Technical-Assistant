@@ -54,18 +54,16 @@ async def lifespan(app: FastAPI):
     db_service = DatabaseService()
     await db_service.create_tables_if_not_exist()
     
-    # Inicializar serviço
+    # Inicializar serviços
     match_service = MatchDataService()
     links_service = SofaScoreLinksService()
     screenshot_service = SofaScoreScreenshotService()
     analysis_service = ScreenshotAnalysisService()
     
-    print("✅ API inicializada com sucesso!")
-    
     yield
     
     # Finalização
-    print("🔄 Finalizando API...")
+    pass
 
 # Criar aplicação FastAPI
 app = FastAPI(
@@ -75,26 +73,31 @@ app = FastAPI(
 
     Esta API permite coletar dados em tempo real do SofaScore e gerar análises técnicas automáticas usando IA.
 
-    ### Funcionalidades Principais:
-    - 📊 **Dados Completos**: Coleta todos os dados disponíveis de uma partida
-    - 🎯 **Dados Simplificados**: Extrai apenas informações relevantes para análise
-    - 🤖 **Análise com IA**: Gera sugestões táticas usando GPT-4o-mini
+    ### Funcionalidades Ativas:
     - 🔗 **Coleta de Links**: Busca links de partidas na homepage do SofaScore
     - 📸 **Screenshots**: Captura imagens das páginas de partidas
     - 🔍 **Análise Visual**: Análise técnica baseada em screenshots
 
-    ### Como usar:
-    1. **Dados Completos**: `POST /match/{match_id}/full-data`
-    2. **Dados Simplificados**: `POST /match/{match_id}/simplified-data`  
-    3. **Análise Completa**: `POST /match/{match_id}/analysis`
-    4. **Coletar Links**: `POST /sofascore/collect-links`
-    5. **Screenshot**: `POST /match/{match_identifier}/screenshot`
-    6. **Análise Visual**: `POST /match/{match_identifier}/screenshot-analysis`
+    ### ⚠️ Funcionalidades em Manutenção:
+    - ~~📊 **Dados Completos**: Coleta todos os dados disponíveis de uma partida~~
+    - ~~🎯 **Dados Simplificados**: Extrai apenas informações relevantes para análise~~
+    - ~~🤖 **Análise com IA**: Gera sugestões táticas usando GPT-4o-mini~~
+    - ~~📋 **Histórico**: Recupera histórico de coletas~~
+
+    ### Como usar (Rotas Ativas):
+    1. **Coletar Links**: `POST /sofascore/collect-links`
+    2. **Screenshot**: `POST /match/{match_identifier}/screenshot`
+    3. **Análise Visual**: `POST /match/{match_identifier}/screenshot-analysis`
+    4. **Consultar Análises**: `GET /match/{match_id}/screenshot-analyses`
 
     ### Banco de Dados:
     - Todos os dados são salvos no Supabase
     - Suporte a múltiplas coletas da mesma partida
     - Ideal para monitoramento em tempo real (coleta a cada 30s)
+    
+    ### Status do Sistema:
+    - ✅ **Screenshots e Análise Visual**: Totalmente funcionais
+    - ⚠️ **Coleta de Dados Diretos**: Em manutenção temporária
     """,
     version="2.0.0",
     contact={
@@ -127,13 +130,24 @@ async def root():
         "version": "2.0.0",
         "status": "✅ Online",
         "timestamp": datetime.now(),
-        "endpoints": {
-            "full_data": "/match/{match_id}/full-data",
-            "simplified_data": "/match/{match_id}/simplified-data",
-            "analysis": "/match/{match_id}/analysis",
+        "active_endpoints": {
             "collect_links": "/sofascore/collect-links",
             "screenshot": "/match/{match_identifier}/screenshot",
-            "screenshot_analysis": "/match/{match_identifier}/screenshot-analysis"
+            "screenshot_analysis": "/match/{match_identifier}/screenshot-analysis",
+            "list_analyses": "/match/{match_id}/screenshot-analyses",
+            "latest_analysis": "/match/{match_id}/screenshot-analysis/latest"
+        },
+        "disabled_endpoints": {
+            "full_data": "/match/{match_id}/full-data [DESABILITADA]",
+            "simplified_data": "/match/{match_id}/simplified-data [DESABILITADA]",
+            "analysis": "/match/{match_id}/analysis [DESABILITADA]",
+            "history": "/match/{match_id}/history [DESABILITADA]"
+        },
+        "system_status": {
+            "screenshots": "✅ Funcionais",
+            "visual_analysis": "✅ Funcionais", 
+            "data_collection": "⚠️ Em manutenção",
+            "database": "✅ Conectado"
         }
     }
 
@@ -165,7 +179,7 @@ async def test_database_connection():
     try:
         db_service = DatabaseService()
         
-        print("🔄 Iniciando teste de conectividade com Supabase...")
+        # Teste de conectividade com Supabase
         connectivity_ok = await db_service.test_connection()
         
         if connectivity_ok:
@@ -203,183 +217,208 @@ async def test_database_connection():
 
 @app.post("/match/{match_id}/full-data", 
           response_model=MatchDataResponse,
-          tags=["Coleta de Dados"],
-          summary="Obter Dados Completos da Partida",
+          tags=["Rotas Desabilitadas"],
+          summary="[DESABILITADA] Obter Dados Completos da Partida",
           description="""
-          Coleta todos os dados disponíveis do SofaScore para uma partida específica.
+          ⚠️ **ROTA TEMPORARIAMENTE DESABILITADA**
           
-          **Dados coletados:**
-          - Informações básicas (times, placar, status)
-          - Estatísticas detalhadas
-          - Timeline de eventos
-          - Escalações e formações
-          - Mapa de chutes (shotmap)
-          - Estatísticas de jogadores
+          Esta rota está temporariamente desabilitada para manutenção.
           
-          **Uso recomendado:** Para análises detalhadas ou como base para outros endpoints.
-          """)
+          ~~Coleta todos os dados disponíveis do SofaScore para uma partida específica.~~
+          
+          **Status:** Desabilitada
+          **Motivo:** Manutenção do sistema
+          """,
+          include_in_schema=False)
 async def get_full_match_data(match_id: str):
-    """Endpoint 1: Obter todos os dados do SofaScore para uma partida específica"""
-    try:
-        print(f"🎯 Requisição para dados completos - Match ID: {match_id}")
-        
-        # Validar match_id
-        if not match_id or not match_id.isdigit():
-            raise HTTPException(
-                status_code=400,
-                detail="Match ID deve ser um número válido"
-            )
-        
-        # Coletar dados
-        result = await match_service.get_full_match_data(match_id)
-        
-        if result["success"]:
-            return MatchDataResponse(**result)
-        else:
-            raise HTTPException(
-                status_code=500,
-                detail=result["message"]
-            )
+    """Endpoint 1: Obter todos os dados do SofaScore para uma partida específica - DESABILITADO"""
+    raise HTTPException(
+        status_code=503,
+        detail="Esta rota está temporariamente desabilitada para manutenção. Use as rotas de screenshot para análise de partidas."
+    )
     
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Erro interno: {str(e)}"
-        )
+    # Código original comentado para manutenção
+    # try:
+    #     print(f"🎯 Requisição para dados completos - Match ID: {match_id}")
+    #     
+    #     # Validar match_id
+    #     if not match_id or not match_id.isdigit():
+    #         raise HTTPException(
+    #             status_code=400,
+    #             detail="Match ID deve ser um número válido"
+    #         )
+    #     
+    #     # Coletar dados
+    #     result = await match_service.get_full_match_data(match_id)
+    #     
+    #     if result["success"]:
+    #         return MatchDataResponse(**result)
+    #     else:
+    #         raise HTTPException(
+    #             status_code=500,
+    #             detail=result["message"]
+    #         )
+    # 
+    # except HTTPException:
+    #     raise
+    # except Exception as e:
+    #     raise HTTPException(
+    #         status_code=500,
+    #         detail=f"Erro interno: {str(e)}"
+    #     )
 
 @app.post("/match/{match_id}/simplified-data",
           response_model=SimplifiedDataResponse,
-          tags=["Coleta de Dados"],
-          summary="Obter Dados Simplificados da Partida",
+          tags=["Rotas Desabilitadas"],
+          summary="[DESABILITADA] Obter Dados Simplificados da Partida",
           description="""
-          Coleta e simplifica dados da partida, extraindo apenas informações relevantes para análise técnica.
+          ⚠️ **ROTA TEMPORARIAMENTE DESABILITADA**
           
-          **Dados simplificados incluem:**
-          - Resumo da partida (times, placar, status)
-          - Estatísticas principais categorizadas
-          - Eventos importantes (gols, cartões, substituições)
-          - Configuração tática (formações, jogadores-chave)
-          - Análise de chutes
+          Esta rota está temporariamente desabilitada para manutenção.
           
-          **Uso recomendado:** Para análises rápidas ou alimentar sistemas de IA.
-          """)
+          ~~Coleta e simplifica dados da partida, extraindo apenas informações relevantes para análise técnica.~~
+          
+          **Status:** Desabilitada
+          **Motivo:** Manutenção do sistema
+          """,
+          include_in_schema=False)
 async def get_simplified_match_data(match_id: str):
-    """Endpoint 2: Obter dados simplificados para uma partida específica"""
-    try:
-        print(f"🎯 Requisição para dados simplificados - Match ID: {match_id}")
-        
-        # Validar match_id
-        if not match_id or not match_id.isdigit():
-            raise HTTPException(
-                status_code=400,
-                detail="Match ID deve ser um número válido"
-            )
-        
-        # Processar dados
-        result = await match_service.get_simplified_match_data(match_id)
-        
-        if result["success"]:
-            return SimplifiedDataResponse(**result)
-        else:
-            raise HTTPException(
-                status_code=500,
-                detail=result["message"]
-            )
+    """Endpoint 2: Obter dados simplificados para uma partida específica - DESABILITADO"""
+    raise HTTPException(
+        status_code=503,
+        detail="Esta rota está temporariamente desabilitada para manutenção. Use as rotas de screenshot para análise de partidas."
+    )
     
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Erro interno: {str(e)}"
-        )
+    # Código original comentado para manutenção
+    # try:
+    #     print(f"🎯 Requisição para dados simplificados - Match ID: {match_id}")
+    #     
+    #     # Validar match_id
+    #     if not match_id or not match_id.isdigit():
+    #         raise HTTPException(
+    #             status_code=400,
+    #             detail="Match ID deve ser um número válido"
+    #         )
+    #     
+    #     # Processar dados
+    #     result = await match_service.get_simplified_match_data(match_id)
+    #     
+    #     if result["success"]:
+    #         return SimplifiedDataResponse(**result)
+    #     else:
+    #         raise HTTPException(
+    #             status_code=500,
+    #             detail=result["message"]
+    #         )
+    # 
+    # except HTTPException:
+    #     raise
+    # except Exception as e:
+    #     raise HTTPException(
+    #         status_code=500,
+    #         detail=f"Erro interno: {str(e)}"
+    #     )
 
 @app.post("/match/{match_id}/analysis",
           response_model=AnalysisResponse,
-          tags=["Análise Técnica"],
-          summary="Obter Análise Completa com IA",
+          tags=["Rotas Desabilitadas"],
+          summary="[DESABILITADA] Obter Análise Completa com IA",
           description="""
-          Coleta dados da partida, simplifica e gera análise técnica completa usando GPT-4o-mini.
+          ⚠️ **ROTA TEMPORARIAMENTE DESABILITADA**
           
-          **Processo completo:**
-          1. Coleta dados completos do SofaScore
-          2. Simplifica dados para análise
-          3. Gera análise técnica especializada com IA
-          4. Salva tudo no banco de dados
+          Esta rota está temporariamente desabilitada para manutenção.
           
-          **A análise inclui:**
-          - Situação tática atual
-          - Análise crítica de pontos-chave
-          - Sugestões táticas prioritárias para ambos os times
-          - Alertas críticos
-          - Previsão tática
+          ~~Coleta dados da partida, simplifica e gera análise técnica completa usando GPT-4o-mini.~~
           
-          **Requisitos:** OPENAI_API_KEY configurada no arquivo .env
-          """)
+          **Status:** Desabilitada
+          **Motivo:** Manutenção do sistema
+          **Alternativa:** Use `/match/{match_identifier}/screenshot-analysis` para análise baseada em screenshot
+          """,
+          include_in_schema=False)
 async def get_match_analysis(match_id: str):
-    """Endpoint 3: Obter dados + sugestão do agente para uma partida específica"""
-    try:
-        print(f"🤖 Requisição para análise completa - Match ID: {match_id}")
-        
-        # Validar match_id
-        if not match_id or not match_id.isdigit():
-            raise HTTPException(
-                status_code=400,
-                detail="Match ID deve ser um número válido"
-            )
-        
-        # Verificar se assistente está disponível
-        if not match_service.assistant:
-            raise HTTPException(
-                status_code=503,
-                detail="Assistente técnico não disponível. Configure OPENAI_API_KEY no arquivo .env"
-            )
-        
-        # Gerar análise completa
-        result = await match_service.get_match_analysis(match_id)
-        
-        if result["success"]:
-            return AnalysisResponse(**result)
-        else:
-            raise HTTPException(
-                status_code=500,
-                detail=result["message"]
-            )
+    """Endpoint 3: Obter dados + sugestão do agente para uma partida específica - DESABILITADO"""
+    raise HTTPException(
+        status_code=503,
+        detail="Esta rota está temporariamente desabilitada para manutenção. Use a rota /match/{match_identifier}/screenshot-analysis para análise de partidas."
+    )
     
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Erro interno: {str(e)}"
-        )
+    # Código original comentado para manutenção
+    # try:
+    #     print(f"🤖 Requisição para análise completa - Match ID: {match_id}")
+    #     
+    #     # Validar match_id
+    #     if not match_id or not match_id.isdigit():
+    #         raise HTTPException(
+    #             status_code=400,
+    #             detail="Match ID deve ser um número válido"
+    #         )
+    #     
+    #     # Verificar se assistente está disponível
+    #     if not match_service.assistant:
+    #         raise HTTPException(
+    #             status_code=503,
+    #             detail="Assistente técnico não disponível. Configure OPENAI_API_KEY no arquivo .env"
+    #         )
+    #     
+    #     # Gerar análise completa
+    #     result = await match_service.get_match_analysis(match_id)
+    #     
+    #     if result["success"]:
+    #         return AnalysisResponse(**result)
+    #     else:
+    #         raise HTTPException(
+    #             status_code=500,
+    #             detail=result["message"]
+    #         )
+    # 
+    # except HTTPException:
+    #     raise
+    # except Exception as e:
+    #     raise HTTPException(
+    #         status_code=500,
+    #         detail=f"Erro interno: {str(e)}"
+    #     )
 
 @app.get("/match/{match_id}/history",
-         tags=["Histórico"],
-         summary="Histórico de Coletas da Partida",
-         description="Recupera o histórico de coletas de dados de uma partida específica")
+         tags=["Rotas Desabilitadas"],
+         summary="[DESABILITADA] Histórico de Coletas da Partida",
+         description="""
+         ⚠️ **ROTA TEMPORARIAMENTE DESABILITADA**
+         
+         Esta rota está temporariamente desabilitada para manutenção.
+         
+         ~~Recupera o histórico de coletas de dados de uma partida específica~~
+         
+         **Status:** Desabilitada
+         **Motivo:** Manutenção do sistema
+         """,
+         include_in_schema=False)
 async def get_match_history(match_id: str, limit: int = 10):
-    """Endpoint para recuperar histórico de coletas de uma partida"""
-    try:
-        db_service = DatabaseService()
-        
-        # Buscar histórico no banco
-        history = await db_service.get_match_history(match_id, limit)
-        
-        return {
-            "success": True,
-            "match_id": match_id,
-            "total_records": len(history),
-            "history": history
-        }
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Erro ao buscar histórico: {str(e)}"
-        )
+    """Endpoint para recuperar histórico de coletas de uma partida - DESABILITADO"""
+    raise HTTPException(
+        status_code=503,
+        detail="Esta rota está temporariamente desabilitada para manutenção."
+    )
+    
+    # Código original comentado para manutenção
+    # try:
+    #     db_service = DatabaseService()
+    #     
+    #     # Buscar histórico no banco
+    #     history = await db_service.get_match_history(match_id, limit)
+    #     
+    #     return {
+    #         "success": True,
+    #         "match_id": match_id,
+    #         "total_records": len(history),
+    #         "history": history
+    #     }
+    #     
+    # except Exception as e:
+    #     raise HTTPException(
+    #         status_code=500,
+    #         detail=f"Erro ao buscar histórico: {str(e)}"
+    #     )
 
 @app.post("/sofascore/collect-links",
           response_model=LinksCollectionResponse,

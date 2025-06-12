@@ -57,8 +57,6 @@ class SofaScoreScreenshotCollector:
             page = await context.new_page()
             
             try:
-                print("🔄 Acessando página inicial do SofaScore...")
-                
                 # Acessar página inicial em português
                 homepage_url = "https://www.sofascore.com/pt/"
                 response = await page.goto(homepage_url, timeout=15000)
@@ -66,8 +64,6 @@ class SofaScoreScreenshotCollector:
                 if response.status != 200:
                     print(f"❌ Erro ao acessar página inicial: Status {response.status}")
                     return None
-                
-                print("✅ Página inicial carregada com sucesso!")
                 
                 # Aguardar carregamento completo
                 await asyncio.sleep(3)
@@ -77,12 +73,9 @@ class SofaScoreScreenshotCollector:
                     cookie_button = page.locator('button:has-text("Accept"), button:has-text("Aceitar"), button:has-text("Concordo"), [data-testid="cookie-accept"]')
                     if await cookie_button.count() > 0:
                         await cookie_button.first.click()
-                        print("🍪 Cookies aceitos")
                         await asyncio.sleep(2)
                 except:
                     pass  # Ignorar se não houver banner de cookies
-                
-                print("🔍 Coletando todos os links da página...")
                 
                 # Coletar todos os elementos <a> com href
                 links_elements = await page.locator('a[href]').all()
@@ -100,8 +93,6 @@ class SofaScoreScreenshotCollector:
                         "other": []
                     }
                 }
-                
-                print(f"📊 Processando {len(links_elements)} elementos de link...")
                 
                 for link_element in links_elements:
                     try:
@@ -144,7 +135,6 @@ class SofaScoreScreenshotCollector:
                                 links_data["categories"]["other"].append(link_info)
                                 
                     except Exception as e:
-                        print(f"⚠️ Erro ao processar link: {e}")
                         continue
                 
                 links_data["total_links"] = len(links_data["links"])
@@ -156,8 +146,6 @@ class SofaScoreScreenshotCollector:
                 
                 with open(filepath, 'w', encoding='utf-8') as f:
                     json.dump(links_data, f, indent=2, ensure_ascii=False)
-                
-                print(f"💾 Links salvos em: {filepath.absolute()}")
                 
                 # Mostrar estatísticas
                 print("=" * 60)
@@ -376,8 +364,6 @@ class SofaScoreScreenshotCollector:
                     print(f"❌ Erro ao acessar página: Status {response.status}")
                     return None
                 
-                print("✅ Página carregada com sucesso!")
-                
                 # Aguardar um pouco para garantir que tudo carregou
                 await asyncio.sleep(3)
                 
@@ -386,7 +372,6 @@ class SofaScoreScreenshotCollector:
                     cookie_button = page.locator('button:has-text("Accept"), button:has-text("Aceitar"), [data-testid="cookie-accept"]')
                     if await cookie_button.count() > 0:
                         await cookie_button.first.click()
-                        print("🍪 Cookies aceitos")
                         await asyncio.sleep(1)
                 except:
                     pass  # Ignorar se não houver banner de cookies
@@ -412,10 +397,7 @@ class SofaScoreScreenshotCollector:
                     home_team = "".join(c for c in home_team if c.isalnum() or c in (' ', '-', '_')).strip()
                     away_team = "".join(c for c in away_team if c.isalnum() or c in (' ', '-', '_')).strip()
                     
-                    print(f"⚽ Partida: {home_team} vs {away_team}")
-                    
                 except Exception as e:
-                    print(f"⚠️ Não foi possível obter nomes dos times: {e}")
                     home_team = "Home"
                     away_team = "Away"
                 
@@ -429,23 +411,12 @@ class SofaScoreScreenshotCollector:
                 filename = "".join(c for c in filename if c.isalnum() or c in (' ', '-', '_', '.')).strip()
                 filepath = self.prints_dir / filename
                 
-                print("📸 Tirando screenshot da página completa...")
-                
                 # Tirar screenshot da página inteira
                 await page.screenshot(
                     path=str(filepath),
                     full_page=True,
                     type='png'
                 )
-                
-                print(f"✅ Screenshot salvo em: {filepath.absolute()}")
-                
-                # Obter dimensões da imagem
-                try:
-                    file_size = filepath.stat().st_size / 1024  # KB
-                    print(f"📊 Tamanho do arquivo: {file_size:.1f} KB")
-                except:
-                    pass
                 
                 return filepath
                 
@@ -466,8 +437,6 @@ class SofaScoreScreenshotCollector:
             page = await context.new_page()
             
             try:
-                print(f"🔄 Acessando página da partida {match_identifier} para screenshots múltiplos...")
-                
                 match_url = self.build_match_url(match_identifier)
                 response = await page.goto(match_url, timeout=30000)
                 
@@ -475,7 +444,6 @@ class SofaScoreScreenshotCollector:
                     print(f"❌ Erro ao acessar página: Status {response.status}")
                     return []
                 
-                print("✅ Página carregada com sucesso!")
                 await asyncio.sleep(3)
                 
                 # Aceitar cookies
@@ -518,14 +486,12 @@ class SofaScoreScreenshotCollector:
                 
                 # Tirar screenshot da página principal (overview)
                 if 'overview' in sections:
-                    print("📸 Screenshot: Visão geral...")
                     filename = f"match_{match_id}_{home_team}_vs_{away_team}_overview_{timestamp}.png"
                     filename = "".join(c for c in filename if c.isalnum() or c in (' ', '-', '_', '.')).strip()
                     filepath = self.prints_dir / filename
                     
                     await page.screenshot(path=str(filepath), full_page=True, type='png')
                     screenshots.append(filepath)
-                    print(f"✅ Overview salvo: {filepath.name}")
                 
                 # Navegar para outras seções
                 section_selectors = {
@@ -540,8 +506,6 @@ class SofaScoreScreenshotCollector:
                     
                     if section in section_selectors:
                         try:
-                            print(f"📸 Screenshot: {section.title()}...")
-                            
                             # Tentar clicar na aba da seção
                             selector = section_selectors[section]
                             tab_element = page.locator(selector)
@@ -556,12 +520,9 @@ class SofaScoreScreenshotCollector:
                                 
                                 await page.screenshot(path=str(filepath), full_page=True, type='png')
                                 screenshots.append(filepath)
-                                print(f"✅ {section.title()} salvo: {filepath.name}")
-                            else:
-                                print(f"⚠️ Seção {section} não encontrada")
                                 
                         except Exception as e:
-                            print(f"⚠️ Erro ao capturar {section}: {e}")
+                            pass
                 
                 print(f"✅ {len(screenshots)} screenshots salvos com sucesso!")
                 return screenshots

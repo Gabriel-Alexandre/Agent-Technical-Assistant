@@ -25,18 +25,14 @@ class DatabaseService:
             raise ValueError("❌ Variáveis SUPABASE_URL e SUPABASE_ANON_KEY não encontradas no .env")
         
         self.client: Client = create_client(self.supabase_url, self.supabase_key)
-        print("✅ Cliente Supabase inicializado com sucesso!")
     
     async def test_connection(self) -> bool:
         """Testa a conectividade com o Supabase"""
         try:
-            print("🔄 Testando conectividade com Supabase...")
-            
             # Tentar fazer uma consulta simples
             result = self.client.table('match_info').select('id').limit(1).execute()
             
             if hasattr(result, 'data'):
-                print("✅ Conectividade com Supabase confirmada!")
                 return True
             else:
                 print("❌ Resposta inesperada do Supabase")
@@ -44,9 +40,6 @@ class DatabaseService:
                 
         except Exception as e:
             print(f"❌ Erro de conectividade com Supabase: {e}")
-            print(f"🔍 Tipo do erro: {type(e).__name__}")
-            print(f"🔍 URL: {self.supabase_url}")
-            print(f"🔍 Key (primeiros 10 chars): {self.supabase_key[:10]}...")
             return False
     
     async def create_tables_if_not_exist(self):
@@ -228,26 +221,17 @@ class DatabaseService:
             for table_name in tables_to_check:
                 try:
                     result = self.client.table(table_name).select('id').limit(1).execute()
-                    print(f"✅ Tabela {table_name} já existe")
                 except Exception:
                     missing_tables.append(table_name)
-                    print(f"⚠️ Tabela {table_name} não encontrada")
             
             if missing_tables:
                 print(f"📝 {len(missing_tables)} tabela(s) precisam ser criadas: {', '.join(missing_tables)}")
-                print("📋 Execute o seguinte SQL no SQL Editor do Supabase:")
-                print("="*60)
-                print(create_tables_sql)
-                print("="*60)
-            else:
-                print("✅ Todas as tabelas necessárias já existem")
+                print("📋 Execute o SQL no SQL Editor do Supabase")
             
             return True
             
         except Exception as e:
             print(f"⚠️ Erro ao verificar/criar tabelas: {e}")
-            print("📝 Execute manualmente o SQL no Supabase:")
-            print(create_tables_sql)
             return False
     
     async def save_match_data(self, match_id: str, full_data: Dict[str, Any], 
@@ -269,10 +253,9 @@ class DatabaseService:
             result = self.client.table('match_data').insert(data_to_insert).execute()
             
             if result.data:
-                print(f"✅ Dados salvos no Supabase - ID: {record_id}")
                 return record_id
             else:
-                print(f"❌ Erro ao salvar no Supabase: {result}")
+                print(f"❌ Erro ao salvar no Supabase")
                 return None
                 
         except Exception as e:
@@ -356,10 +339,9 @@ class DatabaseService:
             result = self.client.table('filtered_links').insert(data_to_insert).execute()
             
             if result.data:
-                print(f"✅ Links filtrados salvos no Supabase - ID: {record_id}")
                 return record_id
             else:
-                print(f"❌ Erro ao salvar links filtrados: {result}")
+                print(f"❌ Erro ao salvar links filtrados")
                 return None
                 
         except Exception as e:
@@ -420,9 +402,6 @@ class DatabaseService:
             # Remover campos None
             data_to_upsert = {k: v for k, v in data_to_upsert.items() if v is not None}
             
-            print(f"🔄 Salvando na tabela match_info usando upsert...")
-            print(f"📊 Dados preparados: {data_to_upsert}")
-            
             # Usar upsert diretamente (mais eficiente e evita erro de chave duplicada)
             result = self.client.table('match_info').upsert(
                 data_to_upsert, 
@@ -431,25 +410,13 @@ class DatabaseService:
             
             if result.data and len(result.data) > 0:
                 actual_record_id = result.data[0].get('id')
-                print(f"✅ Informações da partida salvas via upsert - Match ID: {match_id}, Record ID: {actual_record_id}")
                 return actual_record_id
             else:
-                print(f"❌ Upsert retornou dados vazios: {result}")
+                print(f"❌ Upsert retornou dados vazios")
                 return None
                 
         except Exception as e:
             print(f"❌ Erro ao salvar informações da partida: {e}")
-            print(f"🔍 Tipo do erro: {type(e).__name__}")
-            print(f"🔍 Detalhes completos: {str(e)}")
-            
-            # Verificar se é erro de conexão
-            if "connection" in str(e).lower() or "network" in str(e).lower():
-                print(f"🌐 Possível problema de conectividade com Supabase")
-            elif "authentication" in str(e).lower() or "unauthorized" in str(e).lower():
-                print(f"🔐 Possível problema de autenticação com Supabase")
-            elif "table" in str(e).lower() or "column" in str(e).lower():
-                print(f"🗃️ Possível problema de estrutura da tabela")
-            
             return None
     
     async def get_match_info(self, match_id: str) -> Optional[Dict[str, Any]]:
@@ -493,10 +460,9 @@ class DatabaseService:
                 .execute()
             
             if result.data:
-                print(f"✅ Status da partida {match_id} atualizado para: {status}")
                 return True
             else:
-                print(f"❌ Erro ao atualizar status da partida: {result}")
+                print(f"❌ Erro ao atualizar status da partida")
                 return False
                 
         except Exception as e:
@@ -512,10 +478,9 @@ class DatabaseService:
                 .execute()
             
             if result.data:
-                print(f"✅ Partida {match_id} desativada")
                 return True
             else:
-                print(f"❌ Erro ao desativar partida: {result}")
+                print(f"❌ Erro ao desativar partida")
                 return False
                 
         except Exception as e:
@@ -546,32 +511,16 @@ class DatabaseService:
             # Remover campos None
             data_to_insert = {k: v for k, v in data_to_insert.items() if v is not None}
             
-            print(f"🔄 Tentando salvar na tabela screenshot_analysis...")
-            print(f"📊 Dados preparados: {list(data_to_insert.keys())}")  # Não mostrar dados completos por serem muito grandes
-            print(f"📊 Match ID: {match_id}, Analysis Type: {analysis_type}")
-            
             result = self.client.table('screenshot_analysis').insert(data_to_insert).execute()
             
             if result.data:
-                print(f"✅ Análise de screenshot salva no Supabase - ID: {record_id}")
                 return record_id
             else:
-                print(f"❌ Erro ao salvar análise de screenshot - resultado vazio: {result}")
+                print(f"❌ Erro ao salvar análise de screenshot")
                 return None
                 
         except Exception as e:
             print(f"❌ Erro ao salvar análise de screenshot: {e}")
-            print(f"🔍 Tipo do erro: {type(e).__name__}")
-            print(f"🔍 Detalhes completos: {str(e)}")
-            
-            # Verificar se é erro de conexão
-            if "connection" in str(e).lower() or "network" in str(e).lower():
-                print(f"🌐 Possível problema de conectividade com Supabase")
-            elif "authentication" in str(e).lower() or "unauthorized" in str(e).lower():
-                print(f"🔐 Possível problema de autenticação com Supabase")
-            elif "table" in str(e).lower() or "column" in str(e).lower():
-                print(f"🗃️ Possível problema de estrutura da tabela screenshot_analysis")
-            
             return None
     
     async def get_screenshot_analysis(self, match_id: str, limit: int = 10) -> List[Dict[str, Any]]:
