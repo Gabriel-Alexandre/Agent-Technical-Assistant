@@ -3,7 +3,7 @@
 import { useSearchParams } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import Layout from '@/components/Layout';
-import { ArrowLeft, Play, Pause, RefreshCw, Clock, TrendingUp, Users, Target, Activity } from 'lucide-react';
+import { ArrowLeft, Play, Pause, RefreshCw, Clock, TrendingUp, Users, Target, Activity, Info, Lightbulb, Zap, Eye } from 'lucide-react';
 import Link from 'next/link';
 import ApiService from '@/services/api';
 
@@ -47,7 +47,6 @@ interface HistoryItem {
   away_team: string;
   analysis_text: string;
   created_at: string;
-  analysis_type?: string;
 }
 
 export default function AnalyseSugestoesPage() {
@@ -62,8 +61,102 @@ export default function AnalyseSugestoesPage() {
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [historyLimit, setHistoryLimit] = useState(10);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [matchId, setMatchId] = useState<string | null>(null);
   
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Função para extrair match_id do href
+  const extractMatchIdFromHref = (href: string): string | null => {
+    try {
+      // Decodificar o href
+      const decodedHref = decodeURIComponent(href);
+      
+      // Tentar extrair o match_id de diferentes formatos de URL do SofaScore
+      const patterns = [
+        /\/match\/(\d+)/,  // Padrão comum: /match/12345
+        /match_id[=:](\d+)/, // Query parameter ou similar
+        /\/(\d+)(?:\/|$)/, // ID no final da URL
+      ];
+      
+      for (const pattern of patterns) {
+        const match = decodedHref.match(pattern);
+        if (match && match[1]) {
+          return match[1];
+        }
+      }
+      
+      // Se não encontrar padrão, usar o href como identificador único
+      return btoa(decodedHref).replace(/[^a-zA-Z0-9]/g, '').substring(0, 20);
+    } catch {
+      return null;
+    }
+  };
+
+  // Função para carregar análises existentes da partida
+  const loadExistingAnalyses = async (matchId: string) => {
+    try {
+      setIsLoadingHistory(true);
+      setError(null);
+      
+      const response = await ApiService.getMatchScreenshotAnalyses(matchId, historyLimit);
+      
+      if (response.success && response.data && response.data.length > 0) {
+        setAnalysisHistory(response.data);
+        
+        // Definir a análise mais recente como análise atual
+        const latestAnalysis = response.data[0];
+        if (latestAnalysis) {
+          // Converter HistoryItem para AnalysisData (simulando estrutura completa)
+          const mockAnalysisData: AnalysisData = {
+            match_info: {
+              home_team: latestAnalysis.home_team,
+              away_team: latestAnalysis.away_team,
+              match_id: latestAnalysis.match_id,
+              match_url: href || ''
+            },
+            screenshot_info: {
+              size_bytes: 0,
+              file_size_kb: 0,
+              analysis_method: 'existing'
+            },
+            visual_analysis_data: {
+              home_team: latestAnalysis.home_team,
+              away_team: latestAnalysis.away_team
+            },
+            analysis_text: latestAnalysis.analysis_text,
+            analysis_type: 'screenshot',
+            generated_at: latestAnalysis.created_at,
+            analysis_record_id: latestAnalysis.id
+          };
+          
+          setCurrentAnalysis(mockAnalysisData);
+          setLastUpdate(new Date(latestAnalysis.created_at));
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao carregar análises existentes:', err);
+      // Não mostrar erro se não houver análises, é normal
+    } finally {
+      setIsLoadingHistory(false);
+      setIsInitialLoading(false);
+    }
+  };
+
+  // Carregamento inicial
+  useEffect(() => {
+    if (href) {
+      const extractedMatchId = extractMatchIdFromHref(href);
+      if (extractedMatchId) {
+        setMatchId(extractedMatchId);
+        loadExistingAnalyses(extractedMatchId);
+      } else {
+        setIsInitialLoading(false);
+      }
+    } else {
+      setIsInitialLoading(false);
+    }
+  }, [href]);
 
   // Função para fazer análise
   const performAnalysis = async () => {
@@ -82,8 +175,15 @@ export default function AnalyseSugestoesPage() {
         setCurrentAnalysis(response.data);
         setLastUpdate(new Date());
         
+        // Atualizar matchId se necessário
+        if (response.data.match_info?.match_id) {
+          setMatchId(response.data.match_info.match_id);
+        }
+        
         // Recarregar histórico após nova análise
-        await loadAnalysisHistory();
+        if (matchId || response.data.match_info?.match_id) {
+          await loadAnalysisHistory(matchId || response.data.match_info.match_id);
+        }
       } else {
         setError(response.message || 'Erro na análise');
       }
@@ -96,16 +196,14 @@ export default function AnalyseSugestoesPage() {
   };
 
   // Função para carregar histórico
-  const loadAnalysisHistory = async () => {
-    if (!currentAnalysis?.match_info?.match_id) return;
+  const loadAnalysisHistory = async (targetMatchId?: string) => {
+    const idToUse = targetMatchId || matchId || currentAnalysis?.match_info?.match_id;
+    if (!idToUse) return;
     
     setIsLoadingHistory(true);
     
     try {
-      const response = await ApiService.getMatchScreenshotAnalyses(
-        currentAnalysis.match_info.match_id, 
-        historyLimit
-      );
+      const response = await ApiService.getMatchScreenshotAnalyses(idToUse, historyLimit);
       
       if (response.success && response.data) {
         setAnalysisHistory(response.data);
@@ -143,7 +241,7 @@ export default function AnalyseSugestoesPage() {
 
   // Carregar histórico quando análise atual mudar
   useEffect(() => {
-    if (currentAnalysis?.match_info?.match_id) {
+    if (currentAnalysis?.match_info?.match_id && !isInitialLoading) {
       loadAnalysisHistory();
     }
   }, [currentAnalysis?.match_info?.match_id, historyLimit]);
@@ -256,14 +354,66 @@ export default function AnalyseSugestoesPage() {
           </div>
         </div>
 
+        {/* Loading inicial */}
+        {isInitialLoading && (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <RefreshCw className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-4" />
+              <p className="text-gray-600">Carregando análises existentes da partida...</p>
+            </div>
+          </div>
+        )}
+
+        {/* Dicas sobre o agente automático */}
+        {!isInitialLoading && !autoAnalysis && (
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6">
+            <div className="flex items-start space-x-4">
+              <div className="flex-shrink-0">
+                <Lightbulb className="h-6 w-6 text-blue-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-medium text-blue-900 mb-2">
+                  💡 Dicas do Assistente Técnico
+                </h3>
+                <div className="space-y-3 text-blue-800">
+                  <div className="flex items-start space-x-2">
+                    <Zap className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                    <p className="text-sm">
+                      <strong>Análise Automática:</strong> Ative o modo automático para que o agente monitore a partida continuamente e gere análises a cada minuto.
+                    </p>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <Eye className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                    <p className="text-sm">
+                      <strong>Monitoramento Inteligente:</strong> O agente captura screenshots da partida e analisa mudanças táticas, substituições e momentos importantes.
+                    </p>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <Target className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                    <p className="text-sm">
+                      <strong>Sugestões em Tempo Real:</strong> Receba dicas técnicas baseadas no que está acontecendo na partida, incluindo análise de posse de bola, formação e estatísticas.
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-4 p-3 bg-blue-100 rounded-md">
+                  <p className="text-sm text-blue-800">
+                    <Info className="h-4 w-4 inline mr-1" />
+                    <strong>Recomendação:</strong> Para partidas ao vivo, ative a análise automática para não perder momentos importantes!
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Status da análise automática */}
         {autoAnalysis && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-4">
             <div className="flex items-center">
               <Activity className="h-5 w-5 text-green-600 mr-3 animate-pulse" />
               <div>
-                <span className="text-green-800 font-medium">Análise automática ativa</span>
-                <p className="text-green-700 text-sm">Nova análise a cada minuto</p>
+                <span className="text-green-800 font-medium">🤖 Agente automático ativo</span>
+                <p className="text-green-700 text-sm">Monitorando a partida e gerando análises a cada minuto</p>
               </div>
               {lastUpdate && (
                 <div className="ml-auto text-sm text-green-600">
@@ -275,12 +425,19 @@ export default function AnalyseSugestoesPage() {
         )}
 
         {/* Informações da partida */}
-        {href && (
+        {href && !isInitialLoading && (
           <div className="bg-white rounded-lg shadow-sm p-6">
             <h3 className="text-lg font-medium text-gray-900 mb-4">Partida Selecionada</h3>
             <div className="bg-gray-50 rounded-md p-4">
               <p className="text-sm text-gray-600 mb-2">Link original:</p>
-              <code className="text-sm bg-gray-100 px-2 py-1 rounded break-all">{decodeURIComponent(href)}</code>
+              <a 
+                href={'https://www.sofascore.com/pt/football/match/' + decodeURIComponent(href)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm bg-gray-100 px-2 py-1 rounded break-all text-blue-600 hover:text-blue-800 hover:underline"
+              >
+                {'https://www.sofascore.com/pt/football/match/' + decodeURIComponent(href)}
+              </a>
             </div>
           </div>
         )}
@@ -297,10 +454,12 @@ export default function AnalyseSugestoesPage() {
         )}
 
         {/* Análise atual */}
-        {currentAnalysis && (
+        {currentAnalysis && !isInitialLoading && (
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold text-gray-900">Análise Atual</h3>
+              <h3 className="text-xl font-bold text-gray-900">
+                {currentAnalysis.analysis_record_id ? 'Análise Mais Recente' : 'Análise Atual'}
+              </h3>
               <div className="text-sm text-gray-500">
                 <Clock className="h-4 w-4 inline mr-1" />
                 {formatDateTime(currentAnalysis.generated_at)}
@@ -397,7 +556,7 @@ export default function AnalyseSugestoesPage() {
         )}
 
         {/* Histórico de análises */}
-        {analysisHistory.length > 0 && (
+        {analysisHistory.length > 0 && !isInitialLoading && (
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-bold text-gray-900">Histórico de Análises</h3>
@@ -446,17 +605,22 @@ export default function AnalyseSugestoesPage() {
         )}
 
         {/* Estado vazio */}
-        {!currentAnalysis && !isAnalyzing && !error && (
+        {!currentAnalysis && !isAnalyzing && !error && !isInitialLoading && (
           <div className="text-center py-12">
             <div className="text-gray-400 mb-4">
               <Activity className="h-16 w-16 mx-auto" />
             </div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">
-              Nenhuma análise realizada
+              Nenhuma análise encontrada
             </h3>
             <p className="text-gray-600 mb-4">
-              Clique em "Analisar Agora" para gerar a primeira análise da partida.
+              Esta partida ainda não possui análises. Clique em "Analisar Agora" para gerar a primeira análise.
             </p>
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 max-w-md mx-auto">
+              <p className="text-sm text-yellow-800">
+                💡 <strong>Dica:</strong> Para partidas ao vivo, use a análise automática para monitoramento contínuo!
+              </p>
+            </div>
           </div>
         )}
       </div>

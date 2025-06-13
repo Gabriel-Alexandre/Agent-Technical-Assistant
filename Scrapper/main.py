@@ -68,15 +68,15 @@ async def lifespan(app: FastAPI):
 
 # Criar aplicação FastAPI
 app = FastAPI(
-    title="SofaScore Data Collector API",
+    title="SofaScore Football Data Collector API",
     description="""
-    ## API de Coleta de Dados do SofaScore para Análise Técnica
+    ## API de Coleta de Dados de FUTEBOL do SofaScore para Análise Técnica
 
-    Esta API permite coletar dados em tempo real do SofaScore e gerar análises técnicas automáticas usando IA.
+    Esta API permite coletar dados em tempo real do SofaScore (APENAS FUTEBOL) e gerar análises técnicas automáticas usando IA.
 
     ### Funcionalidades Ativas:
-    - 🔗 **Coleta de Links**: Busca links de partidas na homepage do SofaScore
-    - 📋 **Links Recentes**: Recupera a coleta de links mais recente do banco
+    - ⚽ **Coleta de Links de Futebol**: Busca APENAS links de partidas de futebol na homepage do SofaScore
+    - 📋 **Links Recentes de Futebol**: Recupera a coleta de links de futebol mais recente do banco
     - 📸 **Screenshots**: Captura imagens das páginas de partidas
     - 🔍 **Análise Visual**: Análise técnica baseada em screenshots
 
@@ -86,9 +86,14 @@ app = FastAPI(
     - ~~🤖 **Análise com IA**: Gera sugestões táticas usando GPT-4o-mini~~
     - ~~📋 **Histórico**: Recupera histórico de coletas~~
 
+    ### 🔥 FILTRO AUTOMÁTICO DE FUTEBOL:
+    - ✅ **Inclui**: Partidas de futebol (/football/ na URL)
+    - ❌ **Exclui**: Basquete, tênis, vôlei, e-sports, etc.
+    - 🎯 **Padrão**: 7letras#id:8números + verificação de /football/
+
     ### Como usar (Rotas Ativas):
-    1. **Coletar Links**: `POST /sofascore/collect-links`
-    2. **Links Recentes**: `GET /sofascore/latest-links`
+    1. **Coletar Links de Futebol**: `POST /sofascore/collect-links`
+    2. **Links Recentes de Futebol**: `GET /sofascore/latest-links`
     3. **Screenshot**: `POST /match/{match_identifier}/screenshot`
     4. **Análise Visual**: `POST /match/{match_identifier}/screenshot-analysis`
     5. **Consultar Análises**: `GET /match/{match_id}/screenshot-analyses`
@@ -97,9 +102,11 @@ app = FastAPI(
     - Todos os dados são salvos no Supabase
     - Suporte a múltiplas coletas da mesma partida
     - Ideal para monitoramento em tempo real (coleta a cada 30s)
+    - Identificação automática do esporte (football)
     
     ### Status do Sistema:
     - ✅ **Screenshots e Análise Visual**: Totalmente funcionais
+    - ✅ **Filtro de Futebol**: Ativo e funcionando
     - ⚠️ **Coleta de Dados Diretos**: Em manutenção temporária
     """,
     version="2.0.0",
@@ -129,13 +136,14 @@ analysis_service = ScreenshotAnalysisService()
 async def root():
     """Endpoint raiz - Status da API"""
     return {
-        "message": "🏆 SofaScore Data Collector API",
+        "message": "⚽ SofaScore Football Data Collector API",
         "version": "2.0.0",
         "status": "✅ Online",
         "timestamp": datetime.now(),
+        "sport_filter": "⚽ APENAS FUTEBOL",
         "active_endpoints": {
-            "collect_links": "/sofascore/collect-links",
-            "latest_links": "/sofascore/latest-links",
+            "collect_football_links": "/sofascore/collect-links",
+            "latest_football_links": "/sofascore/latest-links",
             "screenshot": "/match/{match_identifier}/screenshot",
             "screenshot_analysis": "/match/{match_identifier}/screenshot-analysis",
             "list_analyses": "/match/{match_id}/screenshot-analyses",
@@ -148,12 +156,18 @@ async def root():
             "history": "/match/{match_id}/history [DESABILITADA]"
         },
         "system_status": {
-            "links_collection": "✅ Funcionais",
-            "latest_links": "✅ Funcionais",
+            "football_links_collection": "✅ Funcionais (apenas futebol)",
+            "latest_football_links": "✅ Funcionais (apenas futebol)",
             "screenshots": "✅ Funcionais",
             "visual_analysis": "✅ Funcionais", 
+            "sport_filter": "✅ Ativo (exclui basquete, tênis, etc.)",
             "data_collection": "⚠️ Em manutenção",
             "database": "✅ Conectado"
+        },
+        "filters_applied": {
+            "included_sports": ["football"],
+            "excluded_sports": ["basketball", "tennis", "volleyball", "esports", "others"],
+            "url_pattern": "7letras#id:8números + /football/"
         }
     }
 
@@ -429,31 +443,37 @@ async def get_match_history(match_id: str, limit: int = 10):
 @app.post("/sofascore/collect-links",
           response_model=LinksCollectionResponse,
           tags=["Coleta de Links"],
-          summary="Coletar Links de Partidas do SofaScore",
+          summary="Coletar Links de Partidas de FUTEBOL do SofaScore",
           description="""
-          Acessa a página inicial do SofaScore e coleta todos os links de partidas disponíveis.
+          Acessa a página inicial do SofaScore e coleta apenas links de partidas de FUTEBOL.
           
           **Processo:**
           1. Acessa a homepage do SofaScore
           2. Coleta todos os links da página
-          3. Filtra apenas links de partidas (formato: 7letras#id:8números)
+          3. Filtra APENAS links de partidas de FUTEBOL (formato: 7letras#id:8números + /football/)
           4. Salva os links filtrados no banco de dados Supabase
           
+          **Filtros aplicados:**
+          - Padrão regex: 7 letras + #id: + 8 números
+          - Deve conter '/football/' na URL
+          - Exclui automaticamente basquete, tênis, etc.
+          
           **Dados salvos:**
-          - URL completa da partida
+          - URL completa da partida de futebol
           - Texto do link
           - Título (se disponível)
           - Match ID extraído
+          - Identificação do esporte (football)
           - Timestamp da coleta
           
-          **Uso recomendado:** Para descobrir partidas ativas e monitoramento automático.
+          **Uso recomendado:** Para descobrir partidas de futebol ativas e monitoramento automático.
           """)
 async def collect_sofascore_links():
-    """Rota 1: Buscar links no SofaScore e salvar links filtrados no Supabase"""
+    """Rota 1: Buscar links de FUTEBOL no SofaScore e salvar links filtrados no Supabase"""
     try:
-        print("🔗 Iniciando coleta de links do SofaScore...")
+        print("⚽ Iniciando coleta de links de FUTEBOL do SofaScore...")
         
-        # Coletar e filtrar links
+        # Coletar e filtrar links (apenas futebol)
         result = await links_service.collect_and_filter_links()
         
         if result["success"]:
@@ -469,36 +489,41 @@ async def collect_sofascore_links():
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Erro interno na coleta de links: {str(e)}"
+            detail=f"Erro interno na coleta de links de futebol: {str(e)}"
         )
 
 @app.get("/sofascore/latest-links",
          response_model=LatestLinksResponse,
          tags=["Coleta de Links"],
-         summary="Obter Coleta de Links Mais Recente",
+         summary="Obter Coleta de Links de FUTEBOL Mais Recente",
          description="""
-         Retorna a coleta de links mais recente armazenada no banco de dados.
+         Retorna a coleta de links de FUTEBOL mais recente armazenada no banco de dados.
          
          **Retorna:**
-         - Links filtrados da coleta mais recente
+         - Links de partidas de FUTEBOL da coleta mais recente
          - Informações da coleta (timestamp, padrão usado, etc.)
          - Estatísticas dos links (total, match IDs únicos, etc.)
-         - Amostra dos primeiros 5 links
+         - Amostra dos primeiros 5 links de futebol
          
          **Dados incluídos:**
-         - Lista completa de links filtrados
+         - Lista completa de links filtrados (apenas futebol)
          - Estatísticas da coleta
          - Metadados da coleta (ID, timestamp, padrão regex)
          - Amostra de links para visualização rápida
+         - Identificação do esporte (football)
          
-         **Uso recomendado:** Para verificar a última coleta sem executar uma nova busca.
+         **Filtros aplicados:**
+         - Apenas partidas de futebol (/football/ na URL)
+         - Exclui basquete, tênis e outros esportes
+         
+         **Uso recomendado:** Para verificar a última coleta de futebol sem executar uma nova busca.
          """)
 async def get_latest_sofascore_links():
-    """Rota GET: Buscar a coleta de links mais recente do banco de dados"""
+    """Rota GET: Buscar a coleta de links de FUTEBOL mais recente do banco de dados"""
     try:
-        print("🔍 Buscando coleta de links mais recente...")
+        print("⚽ Buscando coleta de links de FUTEBOL mais recente...")
         
-        # Buscar coleta mais recente
+        # Buscar coleta mais recente (apenas futebol)
         result = await links_service.get_latest_links_collection()
         
         if result["success"]:
@@ -514,7 +539,7 @@ async def get_latest_sofascore_links():
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Erro interno ao buscar coleta mais recente: {str(e)}"
+            detail=f"Erro interno ao buscar coleta de futebol mais recente: {str(e)}"
         )
 
 @app.post("/match/{match_identifier:path}/screenshot",

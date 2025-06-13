@@ -754,7 +754,7 @@ class SofaScoreLinksService:
                 
                 links_data["total_links"] = len(links_data["links"])
                 
-                # Processar e filtrar links com padrão específico
+                # Processar e filtrar links com padrão específico APENAS DE FUTEBOL
                 # Padrão regex para o formato: 7 letras + #id: + 8 números
                 # Exemplo: fxcspxc#id:13970328
                 pattern = r'[a-zA-Z]{7}#id:\d{8}$'
@@ -766,23 +766,37 @@ class SofaScoreLinksService:
                 
                 for link in all_links:
                     url = link.get('url', '')
+                    href_original = link.get('href_original', '')
                     
-                    # Verificar se a URL termina com o padrão desejado
+                    # Verificar se a URL termina com o padrão desejado E é de futebol
                     if re.search(pattern, url):
-                        # Processar href_original para remover /pt/football/match/
-                        href_original = link.get('href_original', '')
-                        if href_original.startswith('/pt/football/match/'):
-                            href_original = href_original.replace('/pt/football/match/', '')
+                        # FILTRO PRINCIPAL: Verificar se é especificamente de futebol
+                        is_football = False
                         
-                        filtered_links.append({
-                            'url': url,
-                            'text': link.get('text', ''),
-                            'title': link.get('title', ''),
-                            'match_id': self.extract_match_id_from_url(url),
-                            'href_original': href_original
-                        })
+                        # Verificar se contém '/football/' na URL ou href_original
+                        if '/football/' in url or '/football/' in href_original:
+                            is_football = True
+                        
+                        # Verificar se href_original começa com '/pt/football/match/'
+                        if href_original.startswith('/pt/football/match/'):
+                            is_football = True
+                        
+                        # Só adicionar se for de futebol
+                        if is_football:
+                            # Processar href_original para remover /pt/football/match/
+                            if href_original.startswith('/pt/football/match/'):
+                                href_original = href_original.replace('/pt/football/match/', '')
+                            
+                            filtered_links.append({
+                                'url': url,
+                                'text': link.get('text', ''),
+                                'title': link.get('title', ''),
+                                'match_id': self.extract_match_id_from_url(url),
+                                'href_original': href_original,
+                                'sport': 'football'  # Adicionar identificação do esporte
+                            })
                 
-                print(f"✅ Links encontrados com o padrão: {len(filtered_links)}")
+                print(f"✅ Links de FUTEBOL encontrados com o padrão: {len(filtered_links)}")
                 
                 # Mostrar estatísticas
                 print("=" * 60)
@@ -794,7 +808,7 @@ class SofaScoreLinksService:
                 print(f"🏅 Torneios: {len(links_data['categories']['tournaments'])}")
                 print(f"👤 Jogadores: {len(links_data['categories']['players'])}")
                 print(f"📄 Outros: {len(links_data['categories']['other'])}")
-                print(f"🎯 Links filtrados (padrão específico): {len(filtered_links)}")
+                print(f"⚽ Links filtrados (APENAS FUTEBOL): {len(filtered_links)}")
                 print("=" * 60)
                 
                 # Mostrar alguns exemplos de cada categoria
@@ -818,10 +832,10 @@ class SofaScoreLinksService:
                                 print(f"  {i+1}. [Sem texto]")
                                 print(f"     {link['url']}")
                 
-                # Mostrar alguns exemplos de links filtrados
+                # Mostrar alguns exemplos de links filtrados (apenas futebol)
                 if filtered_links:
                     print("\n" + "=" * 60)
-                    print("🔗 EXEMPLOS DE LINKS FILTRADOS")
+                    print("⚽ EXEMPLOS DE LINKS FILTRADOS (APENAS FUTEBOL)")
                     print("=" * 60)
                     
                     for i, link in enumerate(filtered_links[:10]):  # Mostrar até 10 exemplos
@@ -855,7 +869,7 @@ class SofaScoreLinksService:
                 
                 return {
                     "success": True,
-                    "message": f"Coletados {links_data['total_links']} links, filtrados {len(filtered_links)} links de partidas",
+                    "message": f"Coletados {links_data['total_links']} links, filtrados {len(filtered_links)} links de partidas de FUTEBOL",
                     "data": {
                         "collected_at": links_data["collected_at"],
                         "homepage_url": homepage_url,

@@ -12,6 +12,7 @@ export interface MatchLink {
   title?: string;
   match_id: string;
   href_original: string;
+  sport?: string;
 }
 
 // Novo tipo para a resposta da API de latest-links
