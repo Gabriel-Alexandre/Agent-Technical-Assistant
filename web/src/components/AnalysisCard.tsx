@@ -23,10 +23,17 @@ export default function AnalysisCard({ analysis }: AnalysisCardProps) {
   };
 
   const formatAnalysisText = (text: string) => {
+    // Remover o JSON do final se existir
+    const cleanText = text.replace(/```json[\s\S]*?```/g, '').trim();
+    
     // Converter markdown básico para HTML
-    return text
+    return cleanText
+      .replace(/## (.*?)(\n|$)/g, '<h3 class="text-lg font-semibold text-gray-800 mb-2 mt-4">$1</h3>')
+      .replace(/### (.*?)(\n|$)/g, '<h4 class="text-base font-medium text-gray-700 mb-2 mt-3">$1</h4>')
+      .replace(/• (.*?)(\n|$)/g, '<li class="text-gray-700 mb-1 ml-4">$1</li>')
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/\n\n/g, '<br /><br />')
       .replace(/\n/g, '<br />');
   };
 

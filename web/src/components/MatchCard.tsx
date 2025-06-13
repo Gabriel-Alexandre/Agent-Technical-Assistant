@@ -27,8 +27,9 @@ export default function MatchCard({ match }: MatchCardProps) {
   };
 
   const handleAnalysisClick = () => {
-    // Navega para a página de análise de sugestões passando o href_original
-    router.push(`/analise-sugestoes?href=${encodeURIComponent(match.href_original)}`);
+    // Usar encodeURIComponent para tratar caracteres especiais corretamente
+    const encodedHref = encodeURIComponent(match.href_original);
+    router.push(`/analise-sugestoes?href=${encodedHref}`);
   };
 
   const teams = extractTeams(match.text);
