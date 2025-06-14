@@ -24,6 +24,8 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
+from typing import Dict, Any, List
+from urllib.parse import unquote
 
 # Importar modelos e serviços
 from models import (
@@ -39,32 +41,66 @@ from models import (
     ScreenshotAnalysisRequest,
     ScreenshotAnalysisResponse,
     ScreenshotAnalysisListResponse,
-    ScreenshotAnalysisDetailResponse
+    ScreenshotAnalysisDetailResponse,
+    DatabaseStatsResponse,
+    MatchInfoResponse,
+    MatchInfoListResponse,
+    MatchStatusUpdateResponse
 )
-from services import MatchDataService, SofaScoreLinksService, SofaScoreScreenshotService, ScreenshotAnalysisService
+from services import (
+    MatchDataService, 
+    SofaScoreLiveCollectorAPI, 
+    SofaScoreLinksService,
+    SofaScoreScreenshotService,
+    MatchDataScrapingService  # Novo serviço para análise de dados
+)
 from database_service import DatabaseService
 
-# Configuração da aplicação
+# Variáveis globais para serviços (inicializadas no lifespan)
+match_service = None
+simplifier_service = None
+analysis_service = None  # Agora será MatchDataScrapingService
+links_service = None
+screenshot_service = None
+database_service = None
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Configuração de inicialização e finalização da aplicação"""
-    # Inicialização
-    print("🚀 Iniciando API de Coleta de Dados do SofaScore...")
+    """Gerencia o ciclo de vida da aplicação"""
+    global match_service, simplifier_service, analysis_service, links_service, screenshot_service, database_service
     
-    # Verificar/criar tabelas do banco
-    db_service = DatabaseService()
-    await db_service.create_tables_if_not_exist()
+    print("🚀 Inicializando serviços da aplicação...")
     
-    # Inicializar serviços
-    match_service = MatchDataService()
-    links_service = SofaScoreLinksService()
-    screenshot_service = SofaScoreScreenshotService()
-    analysis_service = ScreenshotAnalysisService()
-    
-    yield
-    
-    # Finalização
-    pass
+    try:
+        # Inicializar DatabaseService
+        print("💾 Inicializando DatabaseService...")
+        database_service = DatabaseService()
+        
+        # Verificar se as tabelas existem e criá-las se necessário
+        try:
+            await database_service.create_tables_if_not_exist()
+            print("✅ DatabaseService inicializado com sucesso!")
+        except Exception as e:
+            print(f"⚠️ Erro ao inicializar DatabaseService: {e}")
+            print("⚠️ Aplicação continuará sem banco de dados")
+        
+        # Inicializar outros serviços
+        print("🔧 Inicializando serviços principais...")
+        match_service = MatchDataService()
+        analysis_service = MatchDataScrapingService()  # Novo serviço de scraping
+        links_service = SofaScoreLinksService()
+        screenshot_service = SofaScoreScreenshotService()
+        
+        print("✅ Todos os serviços inicializados com sucesso!")
+        
+        yield
+        
+    except Exception as e:
+        print(f"❌ Erro durante inicialização dos serviços: {e}")
+        yield
+    finally:
+        print("🔄 Finalizando serviços...")
+        # Cleanup quando a aplicação for encerrada
 
 # Criar aplicação FastAPI
 app = FastAPI(
@@ -127,12 +163,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Inicializar serviço
-match_service = MatchDataService()
-links_service = SofaScoreLinksService()
-screenshot_service = SofaScoreScreenshotService()
-analysis_service = ScreenshotAnalysisService()
-
 @app.get("/", tags=["Status"])
 async def root():
     """Endpoint raiz - Status da API"""
@@ -178,8 +208,7 @@ async def health_check():
     """Verificação de saúde da API"""
     try:
         # Testar conexão com banco
-        db_service = DatabaseService()
-        db_connected = await db_service.test_connection()
+        db_connected = await database_service.test_connection()
         
         return {
             "status": "healthy" if db_connected else "degraded",
@@ -199,15 +228,13 @@ async def health_check():
 async def test_database_connection():
     """Teste específico de conectividade com o Supabase"""
     try:
-        db_service = DatabaseService()
-        
         # Teste de conectividade com Supabase
-        connectivity_ok = await db_service.test_connection()
+        connectivity_ok = await database_service.test_connection()
         
         if connectivity_ok:
             # Tentar também buscar estatísticas do banco
             try:
-                stats = await db_service.get_database_stats()
+                stats = await database_service.get_database_stats()
                 return {
                     "status": "success",
                     "message": "Conectividade com Supabase confirmada",
@@ -645,42 +672,48 @@ async def take_match_screenshot(match_identifier: str):
 
 @app.post("/match/{match_identifier:path}/screenshot-analysis",
           response_model=ScreenshotAnalysisResponse,
-          tags=["Análise de Screenshots"],
-          summary="Análise Técnica a partir de Screenshot",
+          tags=["Análise de Partidas"],
+          summary="Análise Técnica a partir de Dados da Partida",
           description="""
-          Captura screenshot de uma partida e gera análise técnica baseada no contexto visual.
+          Acessa a página da partida, extrai dados em tempo real e gera análise técnica especializada.
           
           **Processo completo:**
-          1. Captura screenshot da página da partida
-          2. Extrai informações contextuais (times, match_id, URL)
-          3. Gera análise técnica especializada considerando:
+          1. Acessa a página da partida no SofaScore
+          2. Extrai dados estruturados (estatísticas, eventos, placar)
+          3. Filtra informações relevantes para análise técnica
+          4. Gera análise técnica especializada considerando:
              - Situação atual da partida
-             - Contexto tático observável
-             - Recomendações para ambos os times
-             - Alertas críticos
-             - Previsão tática
+             - Estatísticas em tempo real
+             - Eventos importantes
+             - Recomendações técnicas diretas
+             - Justificativas baseadas em dados
           
           **Análise inclui:**
-          - 📊 Situação atual da partida
-          - 🎯 Análise visual do screenshot
-          - ⚽ Contexto tático
-          - 🔍 Recomendações técnicas específicas
-          - ⚠️ Alertas críticos
-          - 📈 Previsão tática
+          - 📊 Dados atuais da partida (placar, tempo, status)
+          - 📈 Estatísticas detalhadas (posse, finalizações, passes, etc.)
+          - ⚽ Eventos importantes (cartões, faltas, grandes chances)
+          - 🎯 Recomendações específicas para cada time
+          - ⚠️ Análise baseada em dados reais extraídos
+          
+          **Vantagens:**
+          - Análise baseada em dados precisos e atualizados
+          - Recomendações diretas e justificadas
+          - Processamento rápido sem armazenamento intermediário
+          - Informações extraídas diretamente da fonte
           
           **Requisitos:** 
-          - Playwright funcionando para captura
-          - Screenshot salvo com sucesso
+          - Playwright funcionando para acesso à página
+          - Partida ativa ou recente no SofaScore
           
-          **Nota:** Esta análise é baseada no contexto da partida e informações visuais disponíveis no momento da captura.
+          **Nota:** Esta análise é baseada em dados reais extraídos da página da partida no momento da consulta.
           """)
-async def analyze_match_from_screenshot(match_identifier: str):
-    """Rota 3: Análise técnica do momento da partida a partir do screenshot"""
+async def analyze_match_from_scraping(match_identifier: str):
+    """Análise técnica da partida baseada em scrapping de dados em tempo real"""
     try:
-        print(f"🤖 Iniciando análise técnica via screenshot para: {match_identifier}")
+        print(f"🤖 Iniciando análise técnica via scrapping para: {match_identifier}")
         
-        # Gerar análise a partir do screenshot
-        result = await analysis_service.analyze_match_from_screenshot(match_identifier)
+        # Gerar análise a partir dos dados extraídos
+        result = await analysis_service.analyze_match_from_scraping(match_identifier)
         
         if result["success"]:
             return ScreenshotAnalysisResponse(**result)
@@ -695,36 +728,36 @@ async def analyze_match_from_screenshot(match_identifier: str):
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Erro interno na análise de screenshot: {str(e)}"
+            detail=f"Erro interno na análise de dados: {str(e)}"
         )
 
-# Novas rotas para consultar análises de screenshot
+# Rotas para consultar análises de dados
 @app.get("/match/{match_id}/screenshot-analyses",
          response_model=ScreenshotAnalysisListResponse,
-         tags=["Análise de Screenshots"],
-         summary="Listar Análises de Screenshot de uma Partida",
+         tags=["Análise de Partidas"],
+         summary="Listar Análises de Dados de uma Partida",
          description="""
-         Recupera todas as análises de screenshot realizadas para uma partida específica.
+         Recupera todas as análises baseadas em dados realizadas para uma partida específica.
          
          **Retorna:**
          - Lista de análises ordenadas por data (mais recente primeiro)
          - Informações básicas de cada análise
-         - Metadados da análise
+         - Metadados da análise (estatísticas extraídas, eventos)
          - Timestamps de criação
          
          **Parâmetros:**
          - match_id: ID da partida (8 dígitos)
          - limit: Número máximo de análises a retornar (padrão: 10)
          """)
-async def get_match_screenshot_analyses(match_id: str, limit: int = 10):
-    """Recupera análises de screenshot de uma partida específica"""
+async def get_match_data_analyses(match_id: str, limit: int = 10):
+    """Recupera análises de dados de uma partida específica"""
     try:
         database = DatabaseService()
         analyses = await database.get_screenshot_analysis(match_id, limit)
         
         return ScreenshotAnalysisListResponse(
             success=True,
-            message=f"Encontradas {len(analyses)} análise(s) para a partida {match_id}",
+            message=f"Encontradas {len(analyses)} análise(s) de dados para a partida {match_id}",
             data=analyses,
             total_analyses=len(analyses),
             timestamp=datetime.now()
@@ -738,19 +771,19 @@ async def get_match_screenshot_analyses(match_id: str, limit: int = 10):
 
 @app.get("/match/{match_id}/screenshot-analysis/latest",
          response_model=ScreenshotAnalysisDetailResponse,
-         tags=["Análise de Screenshots"],
-         summary="Obter Análise de Screenshot Mais Recente",
+         tags=["Análise de Partidas"],
+         summary="Obter Análise de Dados Mais Recente",
          description="""
-         Recupera a análise de screenshot mais recente de uma partida específica.
+         Recupera a análise baseada em dados mais recente de uma partida específica.
          
          **Retorna:**
          - Análise completa mais recente
          - Texto da análise técnica
          - Informações da partida
-         - Metadados da análise
+         - Metadados da análise (estatísticas, eventos)
          """)
-async def get_latest_screenshot_analysis(match_id: str):
-    """Recupera a análise de screenshot mais recente de uma partida"""
+async def get_latest_data_analysis(match_id: str):
+    """Recupera a análise de dados mais recente de uma partida"""
     try:
         database = DatabaseService()
         analysis = await database.get_latest_screenshot_analysis(match_id)
@@ -758,12 +791,12 @@ async def get_latest_screenshot_analysis(match_id: str):
         if not analysis:
             raise HTTPException(
                 status_code=404,
-                detail=f"Nenhuma análise de screenshot encontrada para a partida {match_id}"
+                detail=f"Nenhuma análise de dados encontrada para a partida {match_id}"
             )
         
         return ScreenshotAnalysisDetailResponse(
             success=True,
-            message="Análise mais recente recuperada com sucesso",
+            message="Análise de dados mais recente recuperada com sucesso",
             analysis_data=analysis,
             match_info={
                 "match_id": analysis.get("match_id"),
@@ -784,26 +817,26 @@ async def get_latest_screenshot_analysis(match_id: str):
 
 @app.get("/screenshot-analyses",
          response_model=ScreenshotAnalysisListResponse,
-         tags=["Análise de Screenshots"],
-         summary="Listar Todas as Análises de Screenshot",
+         tags=["Análise de Partidas"],
+         summary="Listar Todas as Análises de Dados",
          description="""
-         Recupera todas as análises de screenshot realizadas no sistema.
+         Recupera todas as análises baseadas em dados realizadas no sistema.
          
          **Retorna:**
          - Lista de todas as análises ordenadas por data
          - Informações básicas de cada análise
-         - Filtros por tipo de análise
+         - Tipos de análise (data_scraping_analysis)
          - Paginação com limite configurável
          """)
-async def get_all_screenshot_analyses(limit: int = 50):
-    """Recupera todas as análises de screenshot do sistema"""
+async def get_all_data_analyses(limit: int = 50):
+    """Recupera todas as análises de dados do sistema"""
     try:
         database = DatabaseService()
         analyses = await database.get_all_screenshot_analyses(limit)
         
         return ScreenshotAnalysisListResponse(
             success=True,
-            message=f"Encontradas {len(analyses)} análise(s) no sistema",
+            message=f"Encontradas {len(analyses)} análise(s) de dados no sistema",
             data=analyses,
             total_analyses=len(analyses),
             timestamp=datetime.now()

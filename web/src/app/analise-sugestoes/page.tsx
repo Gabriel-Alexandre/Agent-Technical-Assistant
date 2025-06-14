@@ -364,47 +364,7 @@ export default function AnalyseSugestoesPage() {
           </div>
         )}
 
-        {/* Dicas sobre o agente automático */}
-        {!isInitialLoading && !autoAnalysis && (
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6">
-            <div className="flex items-start space-x-4">
-              <div className="flex-shrink-0">
-                <Lightbulb className="h-6 w-6 text-blue-600" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-lg font-medium text-blue-900 mb-2">
-                  💡 Dicas do Assistente Técnico
-                </h3>
-                <div className="space-y-3 text-blue-800">
-                  <div className="flex items-start space-x-2">
-                    <Zap className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                    <p className="text-sm">
-                      <strong>Análise Automática:</strong> Ative o modo automático para que o agente monitore a partida continuamente e gere análises a cada minuto.
-                    </p>
-                  </div>
-                  <div className="flex items-start space-x-2">
-                    <Eye className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                    <p className="text-sm">
-                      <strong>Monitoramento Inteligente:</strong> O agente captura screenshots da partida e analisa mudanças táticas, substituições e momentos importantes.
-                    </p>
-                  </div>
-                  <div className="flex items-start space-x-2">
-                    <Target className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                    <p className="text-sm">
-                      <strong>Sugestões em Tempo Real:</strong> Receba dicas técnicas baseadas no que está acontecendo na partida, incluindo análise de posse de bola, formação e estatísticas.
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-4 p-3 bg-blue-100 rounded-md">
-                  <p className="text-sm text-blue-800">
-                    <Info className="h-4 w-4 inline mr-1" />
-                    <strong>Recomendação:</strong> Para partidas ao vivo, ative a análise automática para não perder momentos importantes!
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+
 
         {/* Status da análise automática */}
         {autoAnalysis && (

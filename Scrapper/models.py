@@ -159,31 +159,34 @@ class ScreenshotResponse(BaseModel):
     timestamp: datetime
 
 class ScreenshotAnalysisRequest(BaseModel):
-    """Modelo para requisição de análise de screenshot"""
-    match_identifier: str = Field(..., description="Identificador da partida para capturar screenshot e analisar")
+    """Modelo para requisição de análise de dados de partida"""
+    match_identifier: str = Field(..., description="Identificador da partida para extrair dados e analisar")
 
 class ScreenshotAnalysisResponse(BaseModel):
-    """Modelo para resposta de análise de screenshot"""
+    """Modelo para resposta de análise de dados de partida"""
     success: bool
     message: str
     data: Optional[Dict[str, Any]] = None
-    screenshot_data: Optional[Dict[str, Any]] = None
     timestamp: datetime
 
-# Novos modelos para análise de screenshot
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
+
 class ScreenshotAnalysisData(BaseModel):
-    """Modelo para dados de análise de screenshot"""
+    """Modelo para dados de análise baseada em scrapping"""
     match_id: str
     match_identifier: str
     match_url: str
     home_team: Optional[str] = None
     away_team: Optional[str] = None
     analysis_text: str
-    analysis_type: str = "context_based"
+    analysis_type: str = "data_scraping_analysis"
     analysis_metadata: Optional[Dict[str, Any]] = None
 
 class ScreenshotAnalysisListResponse(BaseModel):
-    """Modelo para resposta de lista de análises de screenshot"""
+    """Modelo para resposta de lista de análises de dados"""
     success: bool
     message: str
     data: Optional[List[Dict[str, Any]]] = None
@@ -191,7 +194,7 @@ class ScreenshotAnalysisListResponse(BaseModel):
     timestamp: datetime
 
 class ScreenshotAnalysisDetailResponse(BaseModel):
-    """Modelo para resposta detalhada de análise de screenshot"""
+    """Modelo para resposta detalhada de análise de dados"""
     success: bool
     message: str
     analysis_data: Optional[Dict[str, Any]] = None
