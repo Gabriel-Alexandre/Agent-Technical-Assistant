@@ -3,80 +3,124 @@
 import { useSearchParams } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import Layout from '@/components/Layout';
-import { ArrowLeft, Play, Pause, RefreshCw, Clock, TrendingUp, Users, Target, Activity, Info, Lightbulb, Zap, Eye } from 'lucide-react';
+import { 
+  ArrowLeft, 
+  Play, 
+  Pause, 
+  RefreshCw, 
+  Clock, 
+  TrendingUp, 
+  Users, 
+  Target, 
+  Activity, 
+  BarChart3,
+  AlertCircle,
+  CheckCircle,
+  Zap,
+  Timer,
+  Trophy,
+  MessageSquare,
+  Calendar,
+  ExternalLink
+} from 'lucide-react';
 import Link from 'next/link';
 import ApiService from '@/services/api';
 
+// Interfaces para os dados da nova API
 interface MatchInfo {
   home_team: string;
   away_team: string;
   match_id: string;
   match_url: string;
+  score: string;
+  match_time: string;
+  match_status: string;
 }
 
-interface VisualAnalysisData {
-  home_team: string;
-  away_team: string;
-  score_home?: string;
-  score_away?: string;
-  match_time?: string;
-  match_status?: string;
-  possession_home?: string;
-  possession_away?: string;
-  visible_stats?: string[];
+interface MatchStatistic {
+  home: string;
+  away: string;
+  name: string;
 }
 
-interface AnalysisData {
+interface MatchEvent {
+  time: string;
+  player: string;
+  type: string;
+  team: 'home' | 'away';
+}
+
+interface DataAnalysisResponse {
   match_info: MatchInfo;
-  screenshot_info: {
-    size_bytes: number;
-    file_size_kb: number;
-    analysis_method: string;
-  };
-  visual_analysis_data: VisualAnalysisData;
+  match_statistics: Record<string, MatchStatistic>;
+  match_events: MatchEvent[];
   analysis_text: string;
   analysis_type: string;
   generated_at: string;
   analysis_record_id?: string;
 }
 
-interface HistoryItem {
+interface HistoryAnalysis {
   id: string;
   match_id: string;
+  match_identifier: string;
+  match_url: string;
   home_team: string;
   away_team: string;
   analysis_text: string;
+  analysis_type: string;
+  analysis_metadata: {
+    match_info: MatchInfo;
+    statistics: Record<string, MatchStatistic>;
+    events: MatchEvent[];
+  };
   created_at: string;
+  updated_at: string;
 }
 
 export default function AnalyseSugestoesPage() {
   const searchParams = useSearchParams();
-  const href = searchParams.get('href');
   
+  // Parâmetros da URL
+  const href = searchParams.get('href');
+  const homeTeam = searchParams.get('home_team');
+  const awayTeam = searchParams.get('away_team');
+  const matchStatus = searchParams.get('match_status');
+  const matchTime = searchParams.get('match_time');
+  const homeScore = searchParams.get('home_score');
+  const awayScore = searchParams.get('away_score');
+  
+  // Estados
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [autoAnalysis, setAutoAnalysis] = useState(false);
-  const [currentAnalysis, setCurrentAnalysis] = useState<AnalysisData | null>(null);
-  const [analysisHistory, setAnalysisHistory] = useState<HistoryItem[]>([]);
+  const [currentAnalysis, setCurrentAnalysis] = useState<DataAnalysisResponse | null>(null);
+  const [analysisHistory, setAnalysisHistory] = useState<HistoryAnalysis[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [historyLimit, setHistoryLimit] = useState(10);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [matchId, setMatchId] = useState<string | null>(null);
+  const [analysisCount, setAnalysisCount] = useState(0);
   
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Função para extrair match_id do href
+  // Extrair match_id do href
   const extractMatchIdFromHref = (href: string): string | null => {
     try {
-      // Decodificar o href
       const decodedHref = decodeURIComponent(href);
       
-      // Tentar extrair o match_id de diferentes formatos de URL do SofaScore
+      // Procurar por id: no final da URL
+      const idMatch = decodedHref.match(/id:(\d+)/);
+      if (idMatch && idMatch[1]) {
+        return idMatch[1];
+      }
+      
+      // Outros padrões
       const patterns = [
-        /\/match\/(\d+)/,  // Padrão comum: /match/12345
-        /match_id[=:](\d+)/, // Query parameter ou similar
-        /\/(\d+)(?:\/|$)/, // ID no final da URL
+        /\/match\/(\d+)/,
+        /match_id[=:](\d+)/,
+        /\/(\d+)(?:\/|$)/,
       ];
       
       for (const pattern of patterns) {
@@ -86,57 +130,43 @@ export default function AnalyseSugestoesPage() {
         }
       }
       
-      // Se não encontrar padrão, usar o href como identificador único
-      return btoa(decodedHref).replace(/[^a-zA-Z0-9]/g, '').substring(0, 20);
+      return null;
     } catch {
       return null;
     }
   };
 
-  // Função para carregar análises existentes da partida
+  // Carregar histórico de análises existentes
   const loadExistingAnalyses = async (matchId: string) => {
     try {
       setIsLoadingHistory(true);
       setError(null);
       
-      const response = await ApiService.getMatchScreenshotAnalyses(matchId, historyLimit);
+      const response = await ApiService.getMatchDataAnalyses(matchId, historyLimit);
       
       if (response.success && response.data && response.data.length > 0) {
         setAnalysisHistory(response.data);
+        setAnalysisCount(response.data.length);
         
-        // Definir a análise mais recente como análise atual
+        // Definir a análise mais recente como atual
         const latestAnalysis = response.data[0];
-        if (latestAnalysis) {
-          // Converter HistoryItem para AnalysisData (simulando estrutura completa)
-          const mockAnalysisData: AnalysisData = {
-            match_info: {
-              home_team: latestAnalysis.home_team,
-              away_team: latestAnalysis.away_team,
-              match_id: latestAnalysis.match_id,
-              match_url: href || ''
-            },
-            screenshot_info: {
-              size_bytes: 0,
-              file_size_kb: 0,
-              analysis_method: 'existing'
-            },
-            visual_analysis_data: {
-              home_team: latestAnalysis.home_team,
-              away_team: latestAnalysis.away_team
-            },
+        if (latestAnalysis && latestAnalysis.analysis_metadata) {
+          const convertedAnalysis: DataAnalysisResponse = {
+            match_info: latestAnalysis.analysis_metadata.match_info,
+            match_statistics: latestAnalysis.analysis_metadata.statistics,
+            match_events: latestAnalysis.analysis_metadata.events,
             analysis_text: latestAnalysis.analysis_text,
-            analysis_type: 'screenshot',
+            analysis_type: latestAnalysis.analysis_type,
             generated_at: latestAnalysis.created_at,
             analysis_record_id: latestAnalysis.id
           };
           
-          setCurrentAnalysis(mockAnalysisData);
+          setCurrentAnalysis(convertedAnalysis);
           setLastUpdate(new Date(latestAnalysis.created_at));
         }
       }
     } catch (err) {
       console.error('Erro ao carregar análises existentes:', err);
-      // Não mostrar erro se não houver análises, é normal
     } finally {
       setIsLoadingHistory(false);
       setIsInitialLoading(false);
@@ -156,24 +186,22 @@ export default function AnalyseSugestoesPage() {
     } else {
       setIsInitialLoading(false);
     }
-  }, [href]);
+  }, [href, historyLimit]);
 
-  // Função para fazer análise
-  const performAnalysis = async () => {
+  // Realizar análise em tempo real
+  const performRealTimeAnalysis = async () => {
     if (!href) return;
     
     setIsAnalyzing(true);
     setError(null);
     
     try {
-      console.log('Fazendo análise para href:', href);
-      
-      // Fazer requisição para a API de análise
-      const response = await ApiService.generateScreenshotAnalysis(href);
+      const response = await ApiService.generateDataScrapingAnalysis(href);
       
       if (response.success && response.data) {
         setCurrentAnalysis(response.data);
         setLastUpdate(new Date());
+        setAnalysisCount(prev => prev + 1);
         
         // Atualizar matchId se necessário
         if (response.data.match_info?.match_id) {
@@ -182,7 +210,7 @@ export default function AnalyseSugestoesPage() {
         
         // Recarregar histórico após nova análise
         if (matchId || response.data.match_info?.match_id) {
-          await loadAnalysisHistory(matchId || response.data.match_info.match_id);
+          await loadExistingAnalyses(matchId || response.data.match_info.match_id);
         }
       } else {
         setError(response.message || 'Erro na análise');
@@ -195,56 +223,27 @@ export default function AnalyseSugestoesPage() {
     }
   };
 
-  // Função para carregar histórico
-  const loadAnalysisHistory = async (targetMatchId?: string) => {
-    const idToUse = targetMatchId || matchId || currentAnalysis?.match_info?.match_id;
-    if (!idToUse) return;
-    
-    setIsLoadingHistory(true);
-    
-    try {
-      const response = await ApiService.getMatchScreenshotAnalyses(idToUse, historyLimit);
-      
-      if (response.success && response.data) {
-        setAnalysisHistory(response.data);
-      }
-    } catch (err) {
-      console.error('Erro ao carregar histórico:', err);
-    } finally {
-      setIsLoadingHistory(false);
-    }
-  };
-
-  // Controlar análise automática
-  useEffect(() => {
-    if (autoAnalysis && href) {
-      // Fazer análise imediatamente
-      performAnalysis();
-      
-      // Configurar intervalo de 1 minuto
-      intervalRef.current = setInterval(() => {
-        performAnalysis();
-      }, 60000); // 60 segundos
-      
-      return () => {
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
-        }
-      };
-    } else {
+  // Iniciar/parar análise automática
+  const toggleAutoAnalysis = () => {
+    if (autoAnalysis) {
+      // Parar análise automática
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
+      setAutoAnalysis(false);
+    } else {
+      // Iniciar análise automática
+      setAutoAnalysis(true);
+      // Fazer análise imediatamente
+      performRealTimeAnalysis();
+      
+      // Configurar intervalo de 1 minuto
+      intervalRef.current = setInterval(() => {
+        performRealTimeAnalysis();
+      }, 60000); // 60 segundos
     }
-  }, [autoAnalysis, href]);
-
-  // Carregar histórico quando análise atual mudar
-  useEffect(() => {
-    if (currentAnalysis?.match_info?.match_id && !isInitialLoading) {
-      loadAnalysisHistory();
-    }
-  }, [currentAnalysis?.match_info?.match_id, historyLimit]);
+  };
 
   // Cleanup no unmount
   useEffect(() => {
@@ -255,22 +254,17 @@ export default function AnalyseSugestoesPage() {
     };
   }, []);
 
-  const toggleAutoAnalysis = () => {
-    setAutoAnalysis(!autoAnalysis);
-  };
-
+  // Formatar texto de análise
   const formatAnalysisText = (text: string) => {
-    // Remover o JSON do final se existir
-    const cleanText = text.replace(/```json[\s\S]*?```/g, '').trim();
-    
-    // Converter markdown básico para JSX
-    return cleanText.split('\n').map((line, index) => {
-      if (line.startsWith('## ')) {
-        return <h2 key={index} className="text-2xl font-bold text-gray-900 mb-4">{line.replace('## ', '')}</h2>;
-      } else if (line.startsWith('### ')) {
-        return <h3 key={index} className="text-lg font-semibold text-gray-800 mb-2 mt-4">{line.replace('### ', '')}</h3>;
+    return text.split('\n').map((line, index) => {
+      if (line.startsWith('🏆')) {
+        return <h2 key={index} className="text-2xl font-bold text-gray-900 mb-4 flex items-center"><Trophy className="h-6 w-6 mr-2 text-yellow-600" />{line}</h2>;
+      } else if (line.startsWith('📊')) {
+        return <h3 key={index} className="text-lg font-semibold text-blue-800 mb-2 mt-4 flex items-center"><BarChart3 className="h-5 w-5 mr-2" />{line}</h3>;
+      } else if (line.startsWith('🎯')) {
+        return <h3 key={index} className="text-lg font-semibold text-green-800 mb-2 mt-4 flex items-center"><Target className="h-5 w-5 mr-2" />{line}</h3>;
       } else if (line.startsWith('• ')) {
-        return <li key={index} className="text-gray-700 mb-1">{line.replace('• ', '')}</li>;
+        return <li key={index} className="text-gray-700 mb-1 ml-4">{line.replace('• ', '')}</li>;
       } else if (line.trim() === '') {
         return <br key={index} />;
       } else {
@@ -279,6 +273,7 @@ export default function AnalyseSugestoesPage() {
     });
   };
 
+  // Formatar data/hora
   const formatDateTime = (dateString: string) => {
     try {
       const date = new Date(dateString);
@@ -295,6 +290,7 @@ export default function AnalyseSugestoesPage() {
     }
   };
 
+  // Carregar mais histórico
   const loadMoreHistory = () => {
     setHistoryLimit(prev => prev + 10);
   };
@@ -302,55 +298,79 @@ export default function AnalyseSugestoesPage() {
   return (
     <Layout>
       <div className="space-y-6">
-        {/* Header da página */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Link 
-              href="/"
-              className="flex items-center px-3 py-2 text-gray-600 hover:text-gray-900 transition-colors"
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Voltar
-            </Link>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Análise de Sugestões</h1>
-              <p className="text-gray-600 mt-1">
-                Análise técnica em tempo real da partida
-              </p>
+        {/* Header aprimorado */}
+        <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg shadow-lg text-white p-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <Link 
+                href="/"
+                className="flex items-center px-3 py-2 bg-white/20 rounded-md hover:bg-white/30 transition-colors"
+              >
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Voltar
+              </Link>
+              <div>
+                <h1 className="text-3xl font-bold">Análise Técnica em Tempo Real</h1>
+                <p className="text-blue-100 mt-1">
+                  {homeTeam && awayTeam ? `${homeTeam} vs ${awayTeam}` : 'Monitoramento avançado da partida'}
+                </p>
+                {matchStatus && (
+                  <div className="flex items-center mt-2 space-x-4">
+                    <span className="bg-white/20 px-3 py-1 rounded-full text-sm">
+                      Status: {matchStatus === 'in_progress' ? 'Ao Vivo' : matchStatus === 'not_started' ? 'Não Iniciado' : 'Finalizado'}
+                    </span>
+                    {matchTime && (
+                      <span className="bg-white/20 px-3 py-1 rounded-full text-sm flex items-center">
+                        <Clock className="h-4 w-4 mr-1" />
+                        {matchTime}
+                      </span>
+                    )}
+                    {homeScore && awayScore && (
+                      <span className="bg-white/20 px-3 py-1 rounded-full text-sm font-bold">
+                        {homeScore} - {awayScore}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
 
-          {/* Controles */}
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={performAnalysis}
-              disabled={isAnalyzing}
-              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${isAnalyzing ? 'animate-spin' : ''}`} />
-              {isAnalyzing ? 'Analisando...' : 'Analisar Agora'}
-            </button>
-
-            <button
-              onClick={toggleAutoAnalysis}
-              className={`flex items-center px-4 py-2 rounded-md transition-colors ${
-                autoAnalysis 
-                  ? 'bg-red-600 text-white hover:bg-red-700' 
-                  : 'bg-green-600 text-white hover:bg-green-700'
-              }`}
-            >
-              {autoAnalysis ? (
-                <>
-                  <Pause className="h-4 w-4 mr-2" />
-                  Parar Auto-Análise
-                </>
-              ) : (
-                <>
-                  <Play className="h-4 w-4 mr-2" />
-                  Iniciar Auto-Análise
-                </>
+            {/* Controle principal */}
+            <div className="text-center">
+              <button
+                onClick={toggleAutoAnalysis}
+                disabled={isAnalyzing}
+                className={`flex items-center px-6 py-3 rounded-lg font-semibold transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed ${
+                  autoAnalysis 
+                    ? 'bg-red-500 hover:bg-red-600 text-white' 
+                    : 'bg-green-500 hover:bg-green-600 text-white'
+                }`}
+              >
+                {autoAnalysis ? (
+                  <>
+                    <Pause className="h-5 w-5 mr-2" />
+                    Parar Análise Automática
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-5 w-5 mr-2" />
+                    Iniciar Análise em Tempo Real
+                  </>
+                )}
+              </button>
+              
+              {autoAnalysis && (
+                <div className="mt-2 text-sm text-blue-100">
+                  <div className="flex items-center justify-center">
+                    <Activity className="h-4 w-4 mr-1 animate-pulse" />
+                    Próxima análise em {Math.floor((60 - new Date().getSeconds()) / 1) || 60}s
+                  </div>
+                  <div className="text-xs">
+                    {analysisCount} análise(s) realizadas
+                  </div>
+                </div>
               )}
-            </button>
+            </div>
           </div>
         </div>
 
@@ -359,45 +379,42 @@ export default function AnalyseSugestoesPage() {
           <div className="flex items-center justify-center py-12">
             <div className="text-center">
               <RefreshCw className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-4" />
-              <p className="text-gray-600">Carregando análises existentes da partida...</p>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Carregando análises da partida</h3>
+              <p className="text-gray-600">Verificando histórico de análises existentes...</p>
             </div>
           </div>
         )}
 
-
+        {/* Status da análise em andamento */}
+        {isAnalyzing && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <div className="flex items-center">
+              <RefreshCw className="h-5 w-5 text-yellow-600 mr-3 animate-spin" />
+              <div>
+                <span className="text-yellow-800 font-medium">🔄 Coletando dados em tempo real...</span>
+                <p className="text-yellow-700 text-sm">Extraindo estatísticas e eventos da partida</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Status da análise automática */}
-        {autoAnalysis && (
+        {autoAnalysis && !isAnalyzing && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <div className="flex items-center">
-              <Activity className="h-5 w-5 text-green-600 mr-3 animate-pulse" />
-              <div>
-                <span className="text-green-800 font-medium">🤖 Agente automático ativo</span>
-                <p className="text-green-700 text-sm">Monitorando a partida e gerando análises a cada minuto</p>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <Zap className="h-5 w-5 text-green-600 mr-3 animate-pulse" />
+                <div>
+                  <span className="text-green-800 font-medium">🤖 Monitoramento automático ativo</span>
+                  <p className="text-green-700 text-sm">Gerando análises técnicas a cada minuto</p>
+                </div>
               </div>
               {lastUpdate && (
-                <div className="ml-auto text-sm text-green-600">
+                <div className="text-sm text-green-600 flex items-center">
+                  <CheckCircle className="h-4 w-4 mr-1" />
                   Última atualização: {lastUpdate.toLocaleTimeString('pt-BR')}
                 </div>
               )}
-            </div>
-          </div>
-        )}
-
-        {/* Informações da partida */}
-        {href && !isInitialLoading && (
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Partida Selecionada</h3>
-            <div className="bg-gray-50 rounded-md p-4">
-              <p className="text-sm text-gray-600 mb-2">Link original:</p>
-              <a 
-                href={'https://www.sofascore.com/pt/football/match/' + decodeURIComponent(href)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm bg-gray-100 px-2 py-1 rounded break-all text-blue-600 hover:text-blue-800 hover:underline"
-              >
-                {'https://www.sofascore.com/pt/football/match/' + decodeURIComponent(href)}
-              </a>
             </div>
           </div>
         )}
@@ -406,139 +423,175 @@ export default function AnalyseSugestoesPage() {
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4">
             <div className="flex items-center">
+              <AlertCircle className="h-5 w-5 text-red-600 mr-3" />
               <div className="text-red-800">
-                <strong>Erro:</strong> {error}
+                <strong>Erro na análise:</strong> {error}
               </div>
             </div>
           </div>
         )}
 
-        {/* Análise atual */}
+        {/* Análise atual detalhada */}
         {currentAnalysis && !isInitialLoading && (
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold text-gray-900">
-                {currentAnalysis.analysis_record_id ? 'Análise Mais Recente' : 'Análise Atual'}
-              </h3>
-              <div className="text-sm text-gray-500">
-                <Clock className="h-4 w-4 inline mr-1" />
-                {formatDateTime(currentAnalysis.generated_at)}
-              </div>
-            </div>
-
-            {/* Informações da partida */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-              <div className="bg-blue-50 rounded-lg p-4">
-                <div className="flex items-center mb-2">
-                  <Users className="h-5 w-5 text-blue-600 mr-2" />
-                  <span className="font-medium text-blue-900">Times</span>
-                </div>
-                <p className="text-blue-800">
-                  {currentAnalysis.match_info.home_team} vs {currentAnalysis.match_info.away_team}
-                </p>
-              </div>
-
-              {currentAnalysis.visual_analysis_data.score_home && currentAnalysis.visual_analysis_data.score_away && (
-                <div className="bg-green-50 rounded-lg p-4">
-                  <div className="flex items-center mb-2">
-                    <Target className="h-5 w-5 text-green-600 mr-2" />
-                    <span className="font-medium text-green-900">Placar</span>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Coluna principal - Análise */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Informações da partida */}
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-bold text-gray-900 flex items-center">
+                    <Users className="h-6 w-6 mr-2 text-blue-600" />
+                    Informações da Partida
+                  </h3>
+                  <div className="text-sm text-gray-500 flex items-center">
+                    <Calendar className="h-4 w-4 mr-1" />
+                    {formatDateTime(currentAnalysis.generated_at)}
                   </div>
-                  <p className="text-green-800 text-xl font-bold">
-                    {currentAnalysis.visual_analysis_data.score_home} - {currentAnalysis.visual_analysis_data.score_away}
-                  </p>
                 </div>
-              )}
 
-              {currentAnalysis.visual_analysis_data.match_time && (
-                <div className="bg-purple-50 rounded-lg p-4">
-                  <div className="flex items-center mb-2">
-                    <Clock className="h-5 w-5 text-purple-600 mr-2" />
-                    <span className="font-medium text-purple-900">Tempo</span>
-                  </div>
-                  <p className="text-purple-800">
-                    {currentAnalysis.visual_analysis_data.match_time}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Posse de bola */}
-            {currentAnalysis.visual_analysis_data.possession_home && currentAnalysis.visual_analysis_data.possession_away && (
-              <div className="mb-6">
-                <h4 className="font-medium text-gray-900 mb-3">Posse de Bola</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-blue-600">
-                      {currentAnalysis.visual_analysis_data.possession_home}
-                    </div>
-                    <div className="text-sm text-gray-600">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="text-center p-4 bg-blue-50 rounded-lg">
+                    <div className="text-lg font-bold text-blue-900">
                       {currentAnalysis.match_info.home_team}
                     </div>
+                    <div className="text-sm text-blue-700">Casa</div>
                   </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-red-600">
-                      {currentAnalysis.visual_analysis_data.possession_away}
+                  
+                  <div className="text-center p-4 bg-gray-50 rounded-lg">
+                    <div className="text-2xl font-bold text-gray-900">
+                      {currentAnalysis.match_info.score}
                     </div>
                     <div className="text-sm text-gray-600">
-                      {currentAnalysis.match_info.away_team}
+                      {currentAnalysis.match_info.match_status}
                     </div>
                   </div>
+                  
+                  <div className="text-center p-4 bg-red-50 rounded-lg">
+                    <div className="text-lg font-bold text-red-900">
+                      {currentAnalysis.match_info.away_team}
+                    </div>
+                    <div className="text-sm text-red-700">Fora</div>
+                  </div>
+                </div>
+
+                <div className="mt-4 text-center">
+                  <a 
+                    href={currentAnalysis.match_info.match_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors text-sm"
+                  >
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    Ver no SofaScore
+                  </a>
                 </div>
               </div>
-            )}
 
-            {/* Análise técnica */}
-            <div className="border-t pt-6">
-              <h4 className="font-medium text-gray-900 mb-4">Sugestões Técnicas</h4>
-              <div className="prose max-w-none">
-                {formatAnalysisText(currentAnalysis.analysis_text)}
+              {/* Análise técnica */}
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+                  <MessageSquare className="h-6 w-6 mr-2 text-green-600" />
+                  Análise Técnica Avançada
+                </h3>
+                <div className="prose max-w-none">
+                  {formatAnalysisText(currentAnalysis.analysis_text)}
+                </div>
               </div>
             </div>
 
-            {/* Estatísticas visíveis */}
-            {currentAnalysis.visual_analysis_data.visible_stats && currentAnalysis.visual_analysis_data.visible_stats.length > 0 && (
-              <div className="border-t pt-6 mt-6">
-                <h4 className="font-medium text-gray-900 mb-3">Estatísticas Analisadas</h4>
-                <div className="flex flex-wrap gap-2">
-                  {currentAnalysis.visual_analysis_data.visible_stats.map((stat, index) => (
-                    <span 
-                      key={index}
-                      className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm"
-                    >
-                      {stat}
-                    </span>
-                  ))}
+            {/* Coluna lateral - Estatísticas e Eventos */}
+            <div className="space-y-6">
+              {/* Estatísticas principais */}
+              {Object.keys(currentAnalysis.match_statistics).length > 0 && (
+                <div className="bg-white rounded-lg shadow-sm p-6">
+                  <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
+                    <BarChart3 className="h-5 w-5 mr-2 text-purple-600" />
+                    Estatísticas em Tempo Real
+                  </h3>
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {Object.entries(currentAnalysis.match_statistics).slice(0, 10).map(([key, stat]) => (
+                      <div key={key} className="bg-gray-50 rounded-lg p-3">
+                        <div className="text-sm font-medium text-gray-700 mb-2">{stat.name}</div>
+                        <div className="flex justify-between items-center">
+                          <div className="text-blue-600 font-semibold">{stat.home}</div>
+                          <div className="text-red-600 font-semibold">{stat.away}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+
+              {/* Eventos recentes */}
+              {currentAnalysis.match_events.length > 0 && (
+                <div className="bg-white rounded-lg shadow-sm p-6">
+                  <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
+                    <Activity className="h-5 w-5 mr-2 text-orange-600" />
+                    Eventos Recentes
+                  </h3>
+                  <div className="space-y-3 max-h-64 overflow-y-auto">
+                    {currentAnalysis.match_events.slice(0, 10).map((event, index) => (
+                      <div key={index} className="flex items-center space-x-3 p-2 bg-gray-50 rounded-lg">
+                        <div className={`w-2 h-2 rounded-full ${event.team === 'home' ? 'bg-blue-500' : 'bg-red-500'}`}></div>
+                        <div className="flex-1">
+                          <div className="text-sm font-medium text-gray-900">{event.type}</div>
+                          <div className="text-xs text-gray-600">{event.player}</div>
+                        </div>
+                        <div className="text-xs font-medium text-gray-500">{event.time}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
-        {/* Histórico de análises */}
+        {/* Histórico de análises aprimorado */}
         {analysisHistory.length > 0 && !isInitialLoading && (
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold text-gray-900">Histórico de Análises</h3>
+              <h3 className="text-xl font-bold text-gray-900 flex items-center">
+                <TrendingUp className="h-6 w-6 mr-2 text-indigo-600" />
+                Histórico de Análises
+              </h3>
               <div className="flex items-center text-sm text-gray-500">
-                <TrendingUp className="h-4 w-4 mr-1" />
-                {analysisHistory.length} análise(s)
+                <Timer className="h-4 w-4 mr-1" />
+                {analysisHistory.length} análise(s) registradas
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {analysisHistory.map((item, index) => (
                 <div key={item.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
                   <div className="flex items-center justify-between mb-2">
-                    <div className="font-medium text-gray-900">
+                    <div className="font-medium text-gray-900 text-sm">
                       {item.home_team} vs {item.away_team}
                     </div>
-                    <div className="text-sm text-gray-500">
+                    <div className="text-xs text-gray-500">
                       {formatDateTime(item.created_at)}
                     </div>
                   </div>
-                  <div className="text-sm text-gray-600 line-clamp-3">
-                    {item.analysis_text.substring(0, 200)}...
+                  
+                  {item.analysis_metadata?.match_info && (
+                    <div className="text-xs text-gray-600 mb-2">
+                      {item.analysis_metadata.match_info.score} • {item.analysis_metadata.match_info.match_status}
+                    </div>
+                  )}
+                  
+                  <div className="text-sm text-gray-600 line-clamp-2">
+                    {item.analysis_text.substring(0, 150)}...
+                  </div>
+                  
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                      {item.analysis_type}
+                    </span>
+                    {item.analysis_metadata?.statistics && (
+                      <span className="text-xs text-gray-500">
+                        {Object.keys(item.analysis_metadata.statistics).length} estatísticas
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}
@@ -549,7 +602,7 @@ export default function AnalyseSugestoesPage() {
               <button
                 onClick={loadMoreHistory}
                 disabled={isLoadingHistory}
-                className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:opacity-50 transition-colors"
+                className="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 transition-colors"
               >
                 {isLoadingHistory ? (
                   <>
@@ -564,22 +617,31 @@ export default function AnalyseSugestoesPage() {
           </div>
         )}
 
-        {/* Estado vazio */}
+        {/* Estado vazio melhorado */}
         {!currentAnalysis && !isAnalyzing && !error && !isInitialLoading && (
           <div className="text-center py-12">
             <div className="text-gray-400 mb-4">
-              <Activity className="h-16 w-16 mx-auto" />
+              <Activity className="h-20 w-20 mx-auto" />
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              Nenhuma análise encontrada
+            <h3 className="text-xl font-medium text-gray-900 mb-2">
+              Pronto para análise técnica
             </h3>
-            <p className="text-gray-600 mb-4">
-              Esta partida ainda não possui análises. Clique em "Analisar Agora" para gerar a primeira análise.
+            <p className="text-gray-600 mb-6 max-w-md mx-auto">
+              Esta partida ainda não possui análises. Clique em "Iniciar Análise em Tempo Real" para começar o monitoramento automático.
             </p>
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 max-w-md mx-auto">
-              <p className="text-sm text-yellow-800">
-                💡 <strong>Dica:</strong> Para partidas ao vivo, use a análise automática para monitoramento contínuo!
-              </p>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 max-w-lg mx-auto">
+              <div className="flex items-start space-x-3">
+                <Zap className="h-6 w-6 text-blue-600 flex-shrink-0 mt-1" />
+                <div className="text-left">
+                  <h4 className="font-semibold text-blue-900 mb-2">Análise em Tempo Real</h4>
+                  <ul className="text-sm text-blue-800 space-y-1">
+                    <li>• Coleta automática de dados a cada minuto</li>
+                    <li>• Estatísticas detalhadas da partida</li>
+                    <li>• Eventos e substituições em tempo real</li>
+                    <li>• Recomendações táticas baseadas em IA</li>
+                  </ul>
+                </div>
+              </div>
             </div>
           </div>
         )}

@@ -58,8 +58,17 @@ export default function MatchCard({ match }: MatchCardProps) {
   const showScore = !isPostponed && match.match_status !== 'not_started';
 
   const handleAnalysisClick = () => {
-    const encodedHref = encodeURIComponent(match.url);
-    router.push(`/analise-sugestoes?href=${encodedHref}`);
+    const params = new URLSearchParams({
+      href: match.url,
+      home_team: match.home_team,
+      away_team: match.away_team,
+      match_status: match.match_status,
+      match_time: match.match_time || '',
+      home_score: match.home_score || '',
+      away_score: match.away_score || ''
+    });
+    
+    router.push(`/analise-sugestoes?${params.toString()}`);
   };
 
   return (

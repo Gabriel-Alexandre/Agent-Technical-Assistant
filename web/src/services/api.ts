@@ -75,6 +75,24 @@ export class ApiService {
     const response = await api.post(`/match/${encodeURIComponent(matchIdentifier)}/screenshot`);
     return response.data;
   }
+
+  // Gerar análise de dados com scraping (nova API)
+  static async generateDataScrapingAnalysis(matchIdentifier: string) {
+    const response = await api.post(`/match/${encodeURIComponent(matchIdentifier)}/screenshot-analysis`);
+    return response.data;
+  }
+
+  // Obter análises de dados de uma partida específica (nova API)
+  static async getMatchDataAnalyses(matchId: string, limit: number = 10) {
+    const response = await api.get(`/match/${matchId}/screenshot-analyses?limit=${limit}`);
+    return response.data;
+  }
+
+  // Obter última análise de dados de uma partida (nova API)
+  static async getLatestMatchDataAnalysis(matchId: string) {
+    const response = await api.get(`/match/${matchId}/screenshot-analysis/latest`);
+    return response.data;
+  }
 }
 
 export default ApiService; 
