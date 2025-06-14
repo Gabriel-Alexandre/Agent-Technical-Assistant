@@ -4,6 +4,8 @@
 -- Gerado automaticamente pelo DatabaseService
 -- =====================================================
 
+SET TIME ZONE 'America/Sao_Paulo';
+
 -- Criar extensão UUID se não existir
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 

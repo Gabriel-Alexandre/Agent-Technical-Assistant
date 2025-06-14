@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "⚽ Assistente Técnico de Futebol",
+  title: "Assistente Técnico de Futebol",
   description: "Análise técnica em tempo real de partidas de futebol do SofaScore com IA",
 };
 
