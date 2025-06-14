@@ -111,20 +111,41 @@ class DatabaseStatsResponse(BaseModel):
 
 # Novos modelos para as rotas de links, screenshots e análise
 
+# Modelo para partida detalhada
+class DetailedMatch(BaseModel):
+    """Modelo para partidas com informações detalhadas extraídas"""
+    home_team: str = Field(description="Nome do time da casa")
+    away_team: str = Field(description="Nome do time visitante") 
+    home_score: str = Field(description="Placar do time da casa")
+    away_score: str = Field(description="Placar do time visitante")
+    match_time: str = Field(description="Horário da partida ou tempo atual do jogo")
+    match_status: str = Field(description="Status da partida: not_started, in_progress, finished, postponed")
+    url: str = Field(description="URL da partida no SofaScore")
+
 class LinksCollectionResponse(BaseModel):
-    """Modelo para resposta de coleta de links do SofaScore"""
+    """Modelo para resposta de coleta de links do SofaScore com detalhes das partidas"""
     success: bool
     message: str
     data: Optional[Dict[str, Any]] = None
     timestamp: datetime
+    
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
 
 class LatestLinksResponse(BaseModel):
-    """Modelo para resposta da coleta de links mais recente"""
+    """Modelo para resposta da coleta de links mais recente com detalhes das partidas"""
     success: bool
     message: str
     data: Optional[Dict[str, Any]] = None
     collection_info: Optional[Dict[str, Any]] = None
     timestamp: datetime
+    
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
 
 class ScreenshotRequest(BaseModel):
     """Modelo para requisição de screenshot"""

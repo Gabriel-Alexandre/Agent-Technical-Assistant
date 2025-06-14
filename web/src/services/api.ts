@@ -3,7 +3,8 @@ import {
   LinksCollectionResponse,
   ScreenshotAnalysisListResponse,
   ApiStatusResponse,
-  LatestLinksResponse
+  LatestLinksResponse,
+  CollectLinksDetailedResponse
 } from '@/types/api';
 
 // URL base da API - pode ser configurada via variável de ambiente
@@ -11,7 +12,16 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000, // 30 segundos
+  timeout: 30000, // 30 segundos para operações normais
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// API específica para operações de coleta (timeout maior)
+const apiCollect = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 120000, // 2 minutos para coleta
   headers: {
     'Content-Type': 'application/json',
   },
@@ -32,7 +42,13 @@ export class ApiService {
 
   // Coletar links de partidas do SofaScore
   static async collectLinks(): Promise<LinksCollectionResponse> {
-    const response = await api.post('/sofascore/collect-links');
+    const response = await apiCollect.post('/sofascore/collect-links');
+    return response.data;
+  }
+
+  // Coletar links de partidas detalhadas do SofaScore
+  static async collectDetailedLinks(): Promise<CollectLinksDetailedResponse> {
+    const response = await apiCollect.post('/sofascore/collect-links');
     return response.data;
   }
 

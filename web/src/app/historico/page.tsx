@@ -207,7 +207,7 @@ export default function HistoricoPage() {
                   placeholder="Buscar por times..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800"
                 />
               </div>
             </div>
@@ -217,7 +217,7 @@ export default function HistoricoPage() {
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as 'date' | 'team')}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800"
               >
                 <option value="date">Mais recentes</option>
                 <option value="team">Por time</option>

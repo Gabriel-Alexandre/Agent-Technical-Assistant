@@ -75,8 +75,8 @@ app = FastAPI(
     Esta API permite coletar dados em tempo real do SofaScore (APENAS FUTEBOL) e gerar análises técnicas automáticas usando IA.
 
     ### Funcionalidades Ativas:
-    - ⚽ **Coleta de Links de Futebol**: Busca APENAS links de partidas de futebol na homepage do SofaScore
-    - 📋 **Links Recentes de Futebol**: Recupera a coleta de links de futebol mais recente do banco
+    - ⚽ **Coleta Detalhada de Partidas**: Extrai informações completas (times, placares, tempo, status) de partidas de futebol
+    - 📋 **Partidas Recentes Detalhadas**: Recupera a coleta mais recente com dados completos das partidas
     - 📸 **Screenshots**: Captura imagens das páginas de partidas
     - 🔍 **Análise Visual**: Análise técnica baseada em screenshots
 
@@ -86,17 +86,18 @@ app = FastAPI(
     - ~~🤖 **Análise com IA**: Gera sugestões táticas usando GPT-4o-mini~~
     - ~~📋 **Histórico**: Recupera histórico de coletas~~
 
-    ### 🔥 FILTRO AUTOMÁTICO DE FUTEBOL:
-    - ✅ **Inclui**: Partidas de futebol (/football/ na URL)
+    ### 🔥 EXTRAÇÃO INTELIGENTE DE DADOS:
+    - ✅ **Inclui**: Partidas de futebol com informações completas (times, placares, tempo)
     - ❌ **Exclui**: Basquete, tênis, vôlei, e-sports, etc.
-    - 🎯 **Padrão**: 7letras#id:8números + verificação de /football/
+    - 🎯 **Método**: Análise de elementos HTML específicos do SofaScore
+    - 📊 **Dados**: Times, placares, tempo, status, torneio, URLs
 
     ### Como usar (Rotas Ativas):
-    1. **Coletar Links de Futebol**: `POST /sofascore/collect-links`
-    2. **Links Recentes de Futebol**: `GET /sofascore/latest-links`
-    3. **Screenshot**: `POST /match/{match_identifier}/screenshot`
-    4. **Análise Visual**: `POST /match/{match_identifier}/screenshot-analysis`
-    5. **Consultar Análises**: `GET /match/{match_id}/screenshot-analyses`
+    1. **Coletar Partidas Detalhadas**: `POST /sofascore/collect-links` - Extrai dados completos das partidas
+    2. **Partidas Recentes Detalhadas**: `GET /sofascore/latest-links` - Recupera dados da última coleta
+    3. **Screenshot**: `POST /match/{match_identifier}/screenshot` - Captura imagem da partida
+    4. **Análise Visual**: `POST /match/{match_identifier}/screenshot-analysis` - Análise técnica
+    5. **Consultar Análises**: `GET /match/{match_id}/screenshot-analyses` - Histórico de análises
 
     ### Banco de Dados:
     - Todos os dados são salvos no Supabase
@@ -156,18 +157,19 @@ async def root():
             "history": "/match/{match_id}/history [DESABILITADA]"
         },
         "system_status": {
-            "football_links_collection": "✅ Funcionais (apenas futebol)",
-            "latest_football_links": "✅ Funcionais (apenas futebol)",
+            "detailed_match_collection": "✅ Funcionais (extração completa de dados)",
+            "latest_detailed_matches": "✅ Funcionais (dados completos das partidas)",
             "screenshots": "✅ Funcionais",
             "visual_analysis": "✅ Funcionais", 
-            "sport_filter": "✅ Ativo (exclui basquete, tênis, etc.)",
-            "data_collection": "⚠️ Em manutenção",
+            "sport_filter": "✅ Ativo (apenas futebol)",
+            "data_extraction": "✅ Melhorado (times, placares, tempo, status)",
             "database": "✅ Conectado"
         },
-        "filters_applied": {
+        "extraction_features": {
             "included_sports": ["football"],
             "excluded_sports": ["basketball", "tennis", "volleyball", "esports", "others"],
-            "url_pattern": "7letras#id:8números + /football/"
+            "extracted_data": ["home_team", "away_team", "home_score", "away_score", "match_time", "match_status", "tournament", "match_id", "url"],
+            "extraction_method": "CSS_selectors_based_on_SofaScore_HTML_structure"
         }
     }
 
@@ -440,40 +442,66 @@ async def get_match_history(match_id: str, limit: int = 10):
     #         detail=f"Erro ao buscar histórico: {str(e)}"
     #     )
 
-@app.post("/sofascore/collect-links",
-          response_model=LinksCollectionResponse,
-          tags=["Coleta de Links"],
-          summary="Coletar Links de Partidas de FUTEBOL do SofaScore",
-          description="""
-          Acessa a página inicial do SofaScore e coleta apenas links de partidas de FUTEBOL.
-          
-          **Processo:**
-          1. Acessa a homepage do SofaScore
-          2. Coleta todos os links da página
-          3. Filtra APENAS links de partidas de FUTEBOL (formato: 7letras#id:8números + /football/)
-          4. Salva os links filtrados no banco de dados Supabase
-          
-          **Filtros aplicados:**
-          - Padrão regex: 7 letras + #id: + 8 números
-          - Deve conter '/football/' na URL
-          - Exclui automaticamente basquete, tênis, etc.
-          
-          **Dados salvos:**
-          - URL completa da partida de futebol
-          - Texto do link
-          - Título (se disponível)
-          - Match ID extraído
-          - Identificação do esporte (football)
-          - Timestamp da coleta
-          
-          **Uso recomendado:** Para descobrir partidas de futebol ativas e monitoramento automático.
-          """)
-async def collect_sofascore_links():
-    """Rota 1: Buscar links de FUTEBOL no SofaScore e salvar links filtrados no Supabase"""
+@app.post("/sofascore/collect-links", response_model=LinksCollectionResponse)
+async def collect_links():
+    """
+    🔗 **Coleta Links da Homepage do SofaScore com Detalhes de Partidas**
+    
+    **FUNCIONALIDADE PRINCIPAL:**
+    - Acessa a homepage do SofaScore (https://www.sofascore.com/)
+    - Extrai informações detalhadas de partidas de FUTEBOL em tempo real
+    - Identifica automaticamente diferentes estados das partidas
+    - Ignora partidas sem informações válidas de times
+    
+    **INFORMAÇÕES EXTRAÍDAS POR PARTIDA:**
+    - ⚽ **Times**: Nome do time da casa e visitante
+    - 🏆 **Placares**: Gols de cada time (ou status especial)
+    - ⏰ **Tempo**: Horário de início, minuto atual, ou tempo da partida
+    - 📊 **Status**: Estado atual da partida
+    - 🔗 **URL**: Link direto para a partida no SofaScore
+    
+    **ESTADOS DE PARTIDA SUPORTADOS:**
+    - 🔴 **in_progress**: Partida em andamento (mostra minuto atual e placar)
+    - ⏳ **not_started**: Partida não iniciada (placares 0-0)
+    - ✅ **finished**: Partida finalizada (placar final)
+    - ⏸️ **postponed**: Partida adiada
+    
+    **MELHORIAS IMPLEMENTADAS:**
+    - ✅ Múltiplos seletores CSS para diferentes tipos de partida
+    - ✅ Lógica robusta para partidas finalizadas baseada em exemplos reais
+    - ✅ Validação crítica: ignora partidas sem nomes de times
+    - ✅ Extração otimizada de placares para jogos finalizados
+    - ✅ Logs limpos e informativos
+    
+    **RETORNO:**
+    - Lista de partidas com informações detalhadas
+    - Estatísticas da coleta
+    - Exemplos das partidas encontradas
+    - ID do registro salvo no banco de dados
+    
+    **EXEMPLO DE PARTIDA RETORNADA:**
+    ```json
+    {
+        "home_team": "Derry City",
+        "away_team": "Galway Utd", 
+        "home_score": "1",
+        "away_score": "1",
+        "match_time": "15:45",
+        "match_status": "finished",
+        "url": "https://www.sofascore.com/pt/football/match/..."
+    }
+    ```
+    
+    **OBSERVAÇÕES:**
+    - Foco exclusivo em partidas de futebol
+    - Dados coletados em tempo real da homepage
+    - Partidas inválidas são automaticamente filtradas
+    - Sistema otimizado para diferentes layouts do SofaScore
+    """
     try:
-        print("⚽ Iniciando coleta de links de FUTEBOL do SofaScore...")
+        print("⚽ Iniciando coleta DETALHADA de partidas de FUTEBOL do SofaScore...")
         
-        # Coletar e filtrar links (apenas futebol)
+        # Coletar informações detalhadas das partidas (apenas futebol)
         result = await links_service.collect_and_filter_links()
         
         if result["success"]:
@@ -489,7 +517,7 @@ async def collect_sofascore_links():
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Erro interno na coleta de links de futebol: {str(e)}"
+            detail=f"Erro interno na coleta detalhada de partidas de futebol: {str(e)}"
         )
 
 @app.get("/sofascore/latest-links",
@@ -497,33 +525,52 @@ async def collect_sofascore_links():
          tags=["Coleta de Links"],
          summary="Obter Coleta de Links de FUTEBOL Mais Recente",
          description="""
-         Retorna a coleta de links de FUTEBOL mais recente armazenada no banco de dados.
+         Retorna a coleta de partidas de FUTEBOL mais recente com informações DETALHADAS.
          
-         **Retorna:**
-         - Links de partidas de FUTEBOL da coleta mais recente
-         - Informações da coleta (timestamp, padrão usado, etc.)
-         - Estatísticas dos links (total, match IDs únicos, etc.)
-         - Amostra dos primeiros 5 links de futebol
+         **Retorna Informações Completas:**
+         - 📊 **Partidas detalhadas** da coleta mais recente
+         - 🕐 **Informações em tempo real** (times, placares, tempo)
+         - 📈 **Estatísticas da coleta** (total, match IDs únicos, etc.)
+         - 🎯 **Amostra das primeiras partidas** para visualização rápida
          
-         **Dados incluídos:**
-         - Lista completa de links filtrados (apenas futebol)
-         - Estatísticas da coleta
-         - Metadados da coleta (ID, timestamp, padrão regex)
-         - Amostra de links para visualização rápida
-         - Identificação do esporte (football)
+         **Dados Detalhados Incluídos:**
+         - `detailed_matches`: Lista completa de partidas com:
+           - Nomes dos times (casa e visitante)
+           - Placar atual de cada time
+           - Tempo da partida (horário ou minuto)
+           - Status da partida (não iniciada, em andamento, etc.)
+           - Torneio/competição
+           - Match ID e URLs completas
+         - `collection_info`: Metadados da coleta (timestamp, método, etc.)
+         - `statistics`: Estatísticas da coleta (total de partidas, etc.)
          
-         **Filtros aplicados:**
-         - Apenas partidas de futebol (/football/ na URL)
-         - Exclui basquete, tênis e outros esportes
+         **Exemplo de Dados Retornados:**
+         ```json
+         {
+           "detailed_matches": [
+             {
+               "home_team": "Paysandu",
+               "away_team": "Botafogo-SP", 
+               "home_score": "1",
+               "away_score": "0",
+               "match_time": "45'",
+               "match_status": "in_progress",
+               "tournament": "Série B",
+               "match_id": "13616175",
+               "url": "https://www.sofascore.com/pt/football/match/..."
+             }
+           ]
+         }
+         ```
          
-         **Uso recomendado:** Para verificar a última coleta de futebol sem executar uma nova busca.
+         **Uso recomendado:** Verificar partidas em andamento sem executar nova coleta.
          """)
 async def get_latest_sofascore_links():
-    """Rota GET: Buscar a coleta de links de FUTEBOL mais recente do banco de dados"""
+    """Rota GET: Buscar a coleta de partidas de FUTEBOL mais recente com informações detalhadas do banco de dados"""
     try:
-        print("⚽ Buscando coleta de links de FUTEBOL mais recente...")
+        print("⚽ Buscando coleta DETALHADA de partidas de FUTEBOL mais recente...")
         
-        # Buscar coleta mais recente (apenas futebol)
+        # Buscar coleta mais recente com dados detalhados (apenas futebol)
         result = await links_service.get_latest_links_collection()
         
         if result["success"]:
@@ -539,7 +586,7 @@ async def get_latest_sofascore_links():
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Erro interno ao buscar coleta de futebol mais recente: {str(e)}"
+            detail=f"Erro interno ao buscar coleta detalhada de futebol mais recente: {str(e)}"
         )
 
 @app.post("/match/{match_identifier:path}/screenshot",

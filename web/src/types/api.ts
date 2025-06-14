@@ -15,17 +15,49 @@ export interface MatchLink {
   sport?: string;
 }
 
+// Novo tipo para partidas detalhadas
+export interface DetailedMatch {
+  home_team: string;
+  away_team: string;
+  home_score: string;
+  away_score: string;
+  match_time: string;
+  match_status: 'in_progress' | 'not_started' | 'finished' | 'postponed';
+  url: string;
+}
+
+// Novo tipo para a resposta com partidas detalhadas
+export interface CollectLinksDetailedResponse extends ApiResponse {
+  data: {
+    collected_at: string;
+    homepage_url: string;
+    total_links: number;
+    categories_stats: {
+      matches: number;
+      teams: number;
+      tournaments: number;
+      players: number;
+      other: number;
+    };
+    extraction_method: string;
+    total_detailed_matches: number;
+    detailed_matches: DetailedMatch[];
+    match_details_included: string[];
+    record_id: string;
+  };
+}
+
 // Novo tipo para a resposta da API de latest-links
 export interface LatestLinksResponse extends ApiResponse {
   data: {
-    filtered_links: MatchLink[];
+    filtered_links: DetailedMatch[];
     statistics: {
       total_filtered_links: number;
       unique_match_ids: number;
       links_with_text: number;
       links_with_title: number;
     };
-    sample_links: MatchLink[];
+    sample_links: DetailedMatch[];
   };
   collection_info: {
     id: string;

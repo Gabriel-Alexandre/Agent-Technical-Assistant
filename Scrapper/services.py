@@ -706,8 +706,57 @@ class SofaScoreLinksService:
                     }
                 }
                 
-                print(f"📊 Processando {len(links_elements)} elementos de link...")
+                # Buscar especificamente elementos de partida com informações detalhadas
+                match_containers = await page.locator('a[href*="/football/match/"]').all()
                 
+                detailed_matches = []
+                processed_count = 0
+                valid_matches_count = 0
+                
+                for match_container in match_containers:
+                    try:
+                        processed_count += 1
+                        
+                        # Extrair href e informações básicas
+                        href = await match_container.get_attribute('href')
+                        data_id = await match_container.get_attribute('data-id')
+                        
+                        if not href or '/football/' not in href:
+                            continue
+                            
+                        # Converter para URL completa
+                        if href.startswith('/'):
+                            full_url = f"https://www.sofascore.com{href}"
+                        else:
+                            full_url = href
+                        
+                        # Extrair informações detalhadas da partida
+                        match_details = await self.extract_match_details_from_container(match_container)
+                        
+                        # VALIDAÇÃO CRÍTICA: Ignorar partidas sem nomes de times identificados
+                        if (match_details.get("home_team") == "N/A" or 
+                            match_details.get("away_team") == "N/A" or
+                            not match_details.get("home_team") or 
+                            not match_details.get("away_team")):
+                            continue
+                        
+                        # Validar e limpar os dados extraídos
+                        match_details = self.validate_and_clean_match_data(match_details)
+                        
+                        # Adicionar informações básicas
+                        match_details.update({
+                            "url": full_url
+                        })
+                        
+                        detailed_matches.append(match_details)
+                        valid_matches_count += 1
+                        
+                    except Exception:
+                        continue
+                
+                print(f"⚽ Processados {processed_count} containers, {valid_matches_count} partidas válidas extraídas")
+                
+                # Processar links gerais para estatísticas (manter funcionalidade original)
                 for link_element in links_elements:
                     try:
                         href = await link_element.get_attribute('href')
@@ -754,113 +803,38 @@ class SofaScoreLinksService:
                 
                 links_data["total_links"] = len(links_data["links"])
                 
-                # Processar e filtrar links com padrão específico APENAS DE FUTEBOL
-                # Padrão regex para o formato: 7 letras + #id: + 8 números
-                # Exemplo: fxcspxc#id:13970328
-                pattern = r'[a-zA-Z]{7}#id:\d{8}$'
+                # Usar os dados detalhados das partidas como resultado principal
+                print(f"✅ Partidas de FUTEBOL com detalhes extraídos: {len(detailed_matches)}")
                 
-                filtered_links = []
+                # Mostrar estatísticas resumidas
+                print(f"📊 Links gerais: {links_data['total_links']} | Partidas detalhadas: {len(detailed_matches)}")
                 
-                # Processar todos os links
-                all_links = links_data.get('links', [])
-                
-                for link in all_links:
-                    url = link.get('url', '')
-                    href_original = link.get('href_original', '')
-                    
-                    # Verificar se a URL termina com o padrão desejado E é de futebol
-                    if re.search(pattern, url):
-                        # FILTRO PRINCIPAL: Verificar se é especificamente de futebol
-                        is_football = False
+                # Mostrar apenas algumas partidas como exemplo
+                if detailed_matches:
+                    print("⚽ Exemplos de partidas extraídas:")
+                    for i, match in enumerate(detailed_matches[:3]):  # Mostrar apenas 3 exemplos
+                        status_emoji = {
+                            "not_started": "⏳",
+                            "in_progress": "🔴",
+                            "finished": "✅",
+                            "postponed": "⏸️"
+                        }.get(match.get('match_status', 'N/A'), "❓")
                         
-                        # Verificar se contém '/football/' na URL ou href_original
-                        if '/football/' in url or '/football/' in href_original:
-                            is_football = True
-                        
-                        # Verificar se href_original começa com '/pt/football/match/'
-                        if href_original.startswith('/pt/football/match/'):
-                            is_football = True
-                        
-                        # Só adicionar se for de futebol
-                        if is_football:
-                            # Processar href_original para remover /pt/football/match/
-                            if href_original.startswith('/pt/football/match/'):
-                                href_original = href_original.replace('/pt/football/match/', '')
-                            
-                            filtered_links.append({
-                                'url': url,
-                                'text': link.get('text', ''),
-                                'title': link.get('title', ''),
-                                'match_id': self.extract_match_id_from_url(url),
-                                'href_original': href_original,
-                                'sport': 'football'  # Adicionar identificação do esporte
-                            })
-                
-                print(f"✅ Links de FUTEBOL encontrados com o padrão: {len(filtered_links)}")
-                
-                # Mostrar estatísticas
-                print("=" * 60)
-                print("📊 ESTATÍSTICAS DOS LINKS COLETADOS")
-                print("=" * 60)
-                print(f"🔗 Total de links: {links_data['total_links']}")
-                print(f"⚽ Partidas: {len(links_data['categories']['matches'])}")
-                print(f"🏆 Times: {len(links_data['categories']['teams'])}")
-                print(f"🏅 Torneios: {len(links_data['categories']['tournaments'])}")
-                print(f"👤 Jogadores: {len(links_data['categories']['players'])}")
-                print(f"📄 Outros: {len(links_data['categories']['other'])}")
-                print(f"⚽ Links filtrados (APENAS FUTEBOL): {len(filtered_links)}")
-                print("=" * 60)
-                
-                # Mostrar alguns exemplos de cada categoria
-                categories_display = {
-                    "matches": "⚽ PARTIDAS",
-                    "teams": "🏆 TIMES", 
-                    "tournaments": "🏅 TORNEIOS",
-                    "players": "👤 JOGADORES"
-                }
-                
-                for category, title in categories_display.items():
-                    category_links = links_data["categories"][category]
-                    if category_links:
-                        print(f"\n{title} (primeiros 5):")
-                        for i, link in enumerate(category_links[:5]):
-                            text_display = link["text"][:50] + "..." if len(link["text"]) > 50 else link["text"]
-                            if text_display:
-                                print(f"  {i+1}. {text_display}")
-                                print(f"     {link['url']}")
-                            else:
-                                print(f"  {i+1}. [Sem texto]")
-                                print(f"     {link['url']}")
-                
-                # Mostrar alguns exemplos de links filtrados (apenas futebol)
-                if filtered_links:
-                    print("\n" + "=" * 60)
-                    print("⚽ EXEMPLOS DE LINKS FILTRADOS (APENAS FUTEBOL)")
-                    print("=" * 60)
+                        print(f"  {i+1}. {status_emoji} {match.get('home_team', 'N/A')} vs {match.get('away_team', 'N/A')} - {match.get('match_time', 'N/A')}")
                     
-                    for i, link in enumerate(filtered_links[:10]):  # Mostrar até 10 exemplos
-                        print(f"{i+1}. {link['text'][:50]}..." if len(link['text']) > 50 else f"{i+1}. {link['text']}")
-                        print(f"   URL: {link['url']}")
-                        print(f"   Match ID: {link['match_id']}")
-                        print()
-                    
-                    if len(filtered_links) > 10:
-                        print(f"... e mais {len(filtered_links) - 10} links")
-                    
-                    print("=" * 60)
-                else:
-                    print("⚠️ Nenhum link encontrado com o padrão especificado")
+                    if len(detailed_matches) > 3:
+                        print(f"  ... e mais {len(detailed_matches) - 3} partidas")
                 
-                # Salvar no banco de dados
-                if filtered_links:
+                # Salvar no banco de dados (usar detailed_matches em vez de filtered_links)
+                if detailed_matches:
                     try:
                         record_id = await self.database.save_filtered_links(
                             collection_timestamp=links_data["collected_at"],
-                            source_file="homepage_api_collection",
-                            pattern_used=pattern,
-                            links_data=filtered_links
+                            source_file="homepage_api_collection_detailed",
+                            pattern_used="detailed_football_matches",
+                            links_data=detailed_matches
                         )
-                        print(f"💾 Links salvos no banco com ID: {record_id}")
+                        print(f"💾 Partidas detalhadas salvas no banco com ID: {record_id}")
                     except Exception as e:
                         print(f"⚠️ Erro ao salvar no banco: {e}")
                         record_id = None
@@ -869,7 +843,7 @@ class SofaScoreLinksService:
                 
                 return {
                     "success": True,
-                    "message": f"Coletados {links_data['total_links']} links, filtrados {len(filtered_links)} links de partidas de FUTEBOL",
+                    "message": f"Coletados {links_data['total_links']} links gerais, extraídos detalhes de {len(detailed_matches)} partidas de FUTEBOL",
                     "data": {
                         "collected_at": links_data["collected_at"],
                         "homepage_url": homepage_url,
@@ -881,9 +855,13 @@ class SofaScoreLinksService:
                             "players": len(links_data["categories"]["players"]),
                             "other": len(links_data["categories"]["other"])
                         },
-                        "pattern_used": pattern,
-                        "total_filtered_links": len(filtered_links),
-                        "filtered_links": filtered_links,
+                        "extraction_method": "detailed_football_matches",
+                        "total_detailed_matches": len(detailed_matches),
+                        "detailed_matches": detailed_matches,
+                        "match_details_included": [
+                            "home_team", "away_team", "home_score", "away_score", 
+                            "match_time", "match_status", "url"
+                        ],
                         "record_id": record_id
                     },
                     "timestamp": datetime.now()
@@ -910,6 +888,217 @@ class SofaScoreLinksService:
             return None
         except:
             return None
+    
+
+    
+    async def extract_match_details_from_container(self, match_container):
+        """Extrai informações detalhadas de uma partida do container HTML - VERSÃO ROBUSTA"""
+        match_details = {
+            "home_team": "N/A",
+            "away_team": "N/A", 
+            "home_score": "N/A",
+            "away_score": "N/A",
+            "match_time": "N/A",
+            "match_status": "N/A"
+        }
+        
+        try:
+            # 1. EXTRAIR NOMES DOS TIMES (MÚLTIPLOS SELETORES)
+            # Para jogos normais: <bdi color="onSurface.nLv1" class="Text ezSveL">Vila Nova</bdi>
+            # Para jogos finalizados: <bdi color="onSurface.nLv3" class="Text kwIkWN">Derry City</bdi>
+            team_selectors = [
+                'bdi.Text.ezSveL',    # Times em jogos normais/ao vivo
+                'bdi.Text.kwIkWN'     # Times em jogos finalizados
+            ]
+            
+            teams_found = []
+            for selector in team_selectors:
+                team_elements = match_container.locator(selector)
+                team_count = await team_elements.count()
+                
+                for i in range(team_count):
+                    team_text = await team_elements.nth(i).text_content()
+                    if team_text and team_text.strip():
+                        teams_found.append(team_text.strip())
+                
+                # Se encontrou pelo menos 2 times com este seletor, usar
+                if len(teams_found) >= 2:
+                    break
+            
+            # Se encontrou pelo menos 2 times, usar os primeiros dois
+            if len(teams_found) >= 2:
+                match_details["home_team"] = teams_found[0]
+                match_details["away_team"] = teams_found[1]
+            else:
+                # Se não encontrou times suficientes, retornar dados inválidos
+                return match_details
+            
+            # 2. EXTRAIR TEMPO DA PARTIDA
+            # Baseado no padrão: <bdi font-size="12" color="onSurface.nLv3" class="Text kcRyBI">15:45</bdi>
+            time_element = match_container.locator('bdi.Text.kcRyBI').first
+            if await time_element.count() > 0:
+                time_text = await time_element.text_content()
+                if time_text and time_text.strip():
+                    match_details["match_time"] = time_text.strip()
+            
+            # 3. EXTRAIR STATUS E PLACAR BASEADO NO CONTEXTO
+            # Verificar o atributo title do container principal para identificar status
+            title_element = match_container.locator('[title]').first
+            title_text = ""
+            if await title_element.count() > 0:
+                title_text = await title_element.get_attribute('title') or ""
+            
+            # 4. IDENTIFICAR STATUS DA PARTIDA E EXTRAIR PLACARES
+            if "F2°T" in title_text:
+                match_details["match_status"] = "finished"
+                # Para jogos finalizados, extrair placar dos elementos específicos
+                await self._extract_finished_match_scores(match_container, match_details)
+                
+            elif "Adiado" in title_text:
+                match_details["match_status"] = "postponed"
+                match_details["home_score"] = "Adiado"
+                match_details["away_score"] = "Adiado"
+                
+            elif "2º" in title_text or await self._is_live_match(match_container):
+                match_details["match_status"] = "in_progress"
+                # Para jogos ao vivo, extrair placar e tempo atual
+                await self._extract_live_match_data(match_container, match_details)
+                
+            elif "-" in title_text or title_text == "":
+                match_details["match_status"] = "not_started"
+                match_details["home_score"] = "0"
+                match_details["away_score"] = "0"
+            
+            return match_details
+            
+        except Exception:
+            # Retornar dados inválidos em caso de erro (partida será ignorada)
+            return {
+                "home_team": "N/A",
+                "away_team": "N/A", 
+                "home_score": "N/A",
+                "away_score": "N/A",
+                "match_time": "N/A",
+                "match_status": "N/A"
+            }
+    
+    async def _is_live_match(self, match_container):
+        """Verifica se a partida está ao vivo baseado nas classes CSS"""
+        try:
+            # Procurar por elementos com cor "sofaSingles.live" que indicam jogo ao vivo
+            live_elements = match_container.locator('[color="sofaSingles.live"]')
+            return await live_elements.count() > 0
+        except:
+            return False
+    
+    async def _extract_live_match_data(self, match_container, match_details):
+        """Extrai dados específicos de partidas ao vivo"""
+        try:
+            # Para jogos ao vivo, o tempo pode estar em um elemento específico
+            # Exemplo: <bdi font-size="12" color="sofaSingles.live" class="Text fgUtAL">69<span class="sc-923226f3-0 kvwsHg">'</span></bdi>
+            live_time_element = match_container.locator('bdi.Text.fgUtAL').first
+            if await live_time_element.count() > 0:
+                time_text = await live_time_element.text_content()
+                if time_text and "'" in time_text:
+                    match_details["match_time"] = time_text.strip()
+            
+            # Extrair placares de jogos ao vivo
+            # Padrão: <span color="inherit" class="Text lgdQvL currentScore">0</span>
+            score_elements = match_container.locator('span.Text.lgdQvL.currentScore')
+            score_count = await score_elements.count()
+            
+            if score_count >= 2:
+                home_score_text = await score_elements.nth(0).text_content()
+                away_score_text = await score_elements.nth(1).text_content()
+                
+                if home_score_text and home_score_text.strip().isdigit():
+                    match_details["home_score"] = home_score_text.strip()
+                if away_score_text and away_score_text.strip().isdigit():
+                    match_details["away_score"] = away_score_text.strip()
+                    
+        except Exception:
+            pass
+    
+    async def _extract_finished_match_scores(self, match_container, match_details):
+        """Extrai placares de partidas finalizadas - VERSÃO MELHORADA"""
+        try:
+            # Para jogos finalizados, temos diferentes padrões de seletores:
+            # Exemplo 1: <span color="onSurface.nLv3" class="Text bHDCUJ currentScore">1</span>
+            # Exemplo 2: <span color="onSurface.nLv1" class="Text knHdND currentScore">2</span>
+            
+            score_selectors = [
+                'span.Text.knHdND.currentScore',  # Seletor principal para jogos finalizados
+                'span.Text.bHDCUJ.currentScore',  # Seletor alternativo para jogos finalizados
+                'span.currentScore'               # Seletor genérico como fallback
+            ]
+            
+            scores_found = []
+            
+            for selector in score_selectors:
+                score_elements = match_container.locator(selector)
+                score_count = await score_elements.count()
+                
+                for i in range(score_count):
+                    score_text = await score_elements.nth(i).text_content()
+                    if score_text and score_text.strip() and score_text.strip().isdigit():
+                        scores_found.append(score_text.strip())
+                
+                # Se encontrou pelo menos 2 placares válidos, usar
+                if len(scores_found) >= 2:
+                    break
+            
+            # Se encontrou placares válidos, usar os primeiros dois
+            if len(scores_found) >= 2:
+                match_details["home_score"] = scores_found[0]
+                match_details["away_score"] = scores_found[1]
+            else:
+                # Fallback: tentar extrair de qualquer elemento que contenha números
+                all_score_elements = match_container.locator('span[class*="currentScore"]')
+                score_count = await all_score_elements.count()
+                
+                fallback_scores = []
+                for i in range(score_count):
+                    score_text = await all_score_elements.nth(i).text_content()
+                    if score_text and score_text.strip() and score_text.strip().isdigit():
+                        fallback_scores.append(score_text.strip())
+                
+                if len(fallback_scores) >= 2:
+                    match_details["home_score"] = fallback_scores[0]
+                    match_details["away_score"] = fallback_scores[1]
+                else:
+                    match_details["home_score"] = "0"
+                    match_details["away_score"] = "0"
+                    
+        except Exception:
+            match_details["home_score"] = "0"
+            match_details["away_score"] = "0"
+    
+    def validate_and_clean_match_data(self, match_details):
+        """Valida e limpa os dados extraídos da partida"""
+        try:
+            # 1. Limpar nomes dos times
+            if match_details["home_team"] != "N/A":
+                match_details["home_team"] = re.sub(r'[^\w\s-]', '', match_details["home_team"])[:50].strip()
+            
+            if match_details["away_team"] != "N/A":
+                match_details["away_team"] = re.sub(r'[^\w\s-]', '', match_details["away_team"])[:50].strip()
+            
+            # 2. Validar tempo da partida
+            match_time = match_details.get("match_time", "N/A")
+            if match_time != "N/A" and len(match_time) > 10:
+                match_details["match_time"] = "N/A"
+            
+            # 3. Validar status da partida
+            valid_statuses = ["not_started", "in_progress", "finished", "postponed", "N/A"]
+            if match_details.get("match_status") not in valid_statuses:
+                match_details["match_status"] = "N/A"
+            
+            return match_details
+            
+        except Exception:
+            return match_details
+    
+
 
     async def get_latest_links_collection(self) -> Dict[str, Any]:
         """Busca a coleta de links mais recente do banco de dados"""

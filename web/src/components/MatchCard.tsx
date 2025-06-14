@@ -1,95 +1,112 @@
-import { MatchLink } from '@/types/api';
-import { ExternalLink, Brain } from 'lucide-react';
+import { DetailedMatch } from '@/types/api';
+import { ExternalLink, Brain, Clock, Play, Square, CheckCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface MatchCardProps {
-  match: MatchLink;
+  match: DetailedMatch;
 }
 
 export default function MatchCard({ match }: MatchCardProps) {
   const router = useRouter();
 
-  const extractTeams = (text: string) => {
-    // Remove prefixos de horário e códigos
-    let cleanText = text.replace(/^\d{1,2}:\d{2}[A-Z]*\d*/, '').trim();
-    
-    // Lista de separadores mais comuns em ordem de prioridade
-    const separators = [
-      ' - ', ' vs ', ' x ', ' VS ', ' X ', 
-      'vs', 'VS', 'x', 'X', '-'
-    ];
-    
-    for (const separator of separators) {
-      if (cleanText.includes(separator)) {
-        const parts = cleanText.split(separator);
-        if (parts.length >= 2) {
-          const home = parts[0].trim();
-          const away = parts[1].trim();
-          
-          // Verifica se ambos os times têm pelo menos 2 caracteres
-          if (home.length >= 2 && away.length >= 2) {
-            return { home, away };
-          }
-        }
-      }
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'in_progress':
+        return 'bg-green-100 text-green-800 border-green-200';
+      case 'not_started':
+        return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'finished':
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+      case 'postponed':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200';
     }
-    
-    // Tenta identificar padrões como "TeamA TeamB" (sem separador explícito)
-    const words = cleanText.split(' ');
-    if (words.length >= 2) {
-      // Se há palavras em maiúscula consecutivas, pode ser dois times
-      const upperWords = words.filter(word => word === word.toUpperCase() && word.length > 1);
-      if (upperWords.length >= 2) {
-        const midPoint = Math.floor(upperWords.length / 2);
-        return {
-          home: upperWords.slice(0, midPoint).join(' '),
-          away: upperWords.slice(midPoint).join(' ')
-        };
-      }
-      
-      // Fallback: divide pela metade
-      const midPoint = Math.floor(words.length / 2);
-      return {
-        home: words.slice(0, midPoint).join(' '),
-        away: words.slice(midPoint).join(' ')
-      };
-    }
-    
-    // Se não conseguir dividir, retorna o texto completo como home
-    return { home: cleanText, away: '' };
   };
 
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'in_progress':
+        return <Play className="h-3 w-3" />;
+      case 'not_started':
+        return <Clock className="h-3 w-3" />;
+      case 'finished':
+        return <CheckCircle className="h-3 w-3" />;
+      case 'postponed':
+        return <Square className="h-3 w-3" />;
+      default:
+        return <Square className="h-3 w-3" />;
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'in_progress':
+        return 'Ao Vivo';
+      case 'not_started':
+        return 'Não Iniciado';
+      case 'finished':
+        return 'Finalizado';
+      case 'postponed':
+        return 'Adiado';
+      default:
+        return status;
+    }
+  };
+
+  const isPostponed = match.home_score === 'Adiado' && match.away_score === 'Adiado';
+  const showScore = !isPostponed && match.match_status !== 'not_started';
+
   const handleAnalysisClick = () => {
-    const encodedHref = encodeURIComponent(match.href_original);
+    const encodedHref = encodeURIComponent(match.url);
     router.push(`/analise-sugestoes?href=${encodedHref}`);
   };
 
-  const teams = extractTeams(match.text);
-
   return (
     <div className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 p-4 border">
-      {/* Times */}
+      {/* Status */}
+      <div className="mb-3">
+        <div className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(match.match_status)}`}>
+          {getStatusIcon(match.match_status)}
+          <span>{getStatusLabel(match.match_status)}</span>
+          {match.match_status === 'in_progress' && (
+            <span className="ml-1">• {match.match_time}</span>
+          )}
+        </div>
+        {match.match_status === 'not_started' && (
+          <div className="text-xs text-gray-500 mt-1">
+            {match.match_time}
+          </div>
+        )}
+      </div>
+
+      {/* Times e Placar */}
       <div className="mb-4">
-        <div className="flex items-center justify-center space-x-3">
-          <div className="text-center flex-1">
-            <h3 className="font-semibold text-gray-900 text-sm">{teams.home}</h3>
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <h3 className="font-semibold text-gray-900 text-sm truncate">{match.home_team}</h3>
             <span className="text-xs text-gray-500">Casa</span>
           </div>
           
-          {teams.away && (
-            <>
-              <div className="text-lg font-bold text-gray-400">×</div>
-              <div className="text-center flex-1">
-                <h3 className="font-semibold text-gray-900 text-sm">{teams.away}</h3>
-                <span className="text-xs text-gray-500">Fora</span>
+          {showScore && (
+            <div className="mx-4 text-center">
+              <div className="text-lg font-bold text-gray-900">
+                {match.home_score} - {match.away_score}
               </div>
-            </>
+            </div>
           )}
+          
+          {!showScore && (
+            <div className="mx-4 text-center">
+              <div className="text-lg font-bold text-gray-400">vs</div>
+            </div>
+          )}
+          
+          <div className="flex-1 text-right">
+            <h3 className="font-semibold text-gray-900 text-sm truncate">{match.away_team}</h3>
+            <span className="text-xs text-gray-500">Fora</span>
+          </div>
         </div>
-        
-        {match.title && (
-          <p className="text-xs text-gray-500 text-center mt-2 truncate">{match.title}</p>
-        )}
       </div>
 
       {/* Ações */}
@@ -111,13 +128,6 @@ export default function MatchCard({ match }: MatchCardProps) {
           <ExternalLink className="h-4 w-4 mr-1" />
           SofaScore
         </a>
-      </div>
-
-      {/* ID da partida */}
-      <div className="mt-3 pt-2 border-t border-gray-100">
-        <p className="text-xs text-gray-400 text-center">
-          ID: {match.match_id}
-        </p>
       </div>
     </div>
   );
