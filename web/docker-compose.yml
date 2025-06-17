@@ -1,3 +1,5 @@
+version: "3.9"
+
 services:
   web-app:
     container_name: nextjs-web-app
@@ -9,7 +11,13 @@ services:
     env_file:
       - .env
     ports:
-      - "3001:3000"
+      - "3000:3000"
     restart: unless-stopped
+    networks:
+      - coolify
+
+networks:
+  coolify:
+    external: true
 
 
