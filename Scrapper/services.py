@@ -714,23 +714,6 @@ class SofaScoreLinksService:
                     
                     print("🔍 Coletando todos os links da página...")
                     
-                    # Coletar todos os elementos <a> com href
-                    links_elements = await page.locator('a[href]').all()
-                    
-                    links_data = {
-                        "collected_at": datetime.now().isoformat(),
-                        "homepage_url": homepage_url,
-                        "total_links": 0,
-                        "links": [],
-                        "categories": {
-                            "matches": [],
-                            "teams": [],
-                            "tournaments": [],
-                            "players": [],
-                            "other": []
-                        }
-                    }
-                    
                     # Buscar especificamente elementos de partida com informações detalhadas
                     print("🔍 [LINKS-SERVICE] Buscando elementos de partidas de futebol...")
                     match_containers = await page.locator('a[href*="/football/match/"]').all()
@@ -743,12 +726,14 @@ class SofaScoreLinksService:
                     for match_container in match_containers:
                         try:
                             processed_count += 1
+                            print(f"🔄 [LINKS-SERVICE] Processando container {processed_count}/{len(match_containers)}")
                             
                             # Extrair href e informações básicas
                             href = await match_container.get_attribute('href')
-                            data_id = await match_container.get_attribute('data-id')
+                            print(f"🔗 [LINKS-SERVICE] HREF extraído: {href}")
                             
                             if not href or '/football/' not in href:
+                                print(f"⚠️ [LINKS-SERVICE] HREF inválido ou não é partida de futebol: {href}")
                                 continue
                                 
                             # Converter para URL completa
@@ -757,14 +742,19 @@ class SofaScoreLinksService:
                             else:
                                 full_url = href
                             
+                            print(f"🌐 [LINKS-SERVICE] URL completa: {full_url}")
+                            
                             # Extrair informações detalhadas da partida
+                            print(f"🔍 [LINKS-SERVICE] Iniciando extração de detalhes...")
                             match_details = await self.extract_match_details_from_container(match_container)
+                            print(f"📋 [LINKS-SERVICE] Detalhes extraídos: {match_details}")
                             
                             # VALIDAÇÃO CRÍTICA: Ignorar partidas sem nomes de times identificados
                             if (match_details.get("home_team") == "N/A" or 
                                 match_details.get("away_team") == "N/A" or
                                 not match_details.get("home_team") or 
                                 not match_details.get("away_team")):
+                                print(f"❌ [LINKS-SERVICE] Partida rejeitada - times inválidos: home='{match_details.get('home_team')}', away='{match_details.get('away_team')}'")
                                 continue
                             
                             # Validar e limpar os dados extraídos
@@ -777,86 +767,19 @@ class SofaScoreLinksService:
                             
                             detailed_matches.append(match_details)
                             valid_matches_count += 1
+                            print(f"✅ [LINKS-SERVICE] Partida válida adicionada: {match_details.get('home_team')} vs {match_details.get('away_team')}")
                             
-                        except Exception:
+                        except Exception as e:
+                            print(f"❌ [LINKS-SERVICE] Erro ao processar container {processed_count}: {type(e).__name__}: {str(e)}")
                             continue
                     
                     print(f"⚽ Processados {processed_count} containers, {valid_matches_count} partidas válidas extraídas")
                     
-                    # Processar links gerais para estatísticas (manter funcionalidade original)
-                    for link_element in links_elements:
-                        try:
-                            href = await link_element.get_attribute('href')
-                            text = await link_element.text_content()
-                            title = await link_element.get_attribute('title')
-                            
-                            if href:
-                                # Converter links relativos em absolutos
-                                if href.startswith('/'):
-                                    full_url = f"https://www.sofascore.com{href}"
-                                elif href.startswith('http'):
-                                    full_url = href
-                                else:
-                                    continue  # Pular links inválidos
-                                
-                                # Limpar texto
-                                text = text.strip() if text else ""
-                                title = title.strip() if title else ""
-                                
-                                link_info = {
-                                    "url": full_url,
-                                    "text": text,
-                                    "title": title,
-                                    "href_original": href
-                                }
-                                
-                                links_data["links"].append(link_info)
-                                
-                                # Categorizar links
-                                if '/match/' in href or '/game/' in href:
-                                    links_data["categories"]["matches"].append(link_info)
-                                elif '/team/' in href or '/club/' in href:
-                                    links_data["categories"]["teams"].append(link_info)
-                                elif '/tournament/' in href or '/league/' in href or '/competition/' in href:
-                                    links_data["categories"]["tournaments"].append(link_info)
-                                elif '/player/' in href:
-                                    links_data["categories"]["players"].append(link_info)
-                                else:
-                                    links_data["categories"]["other"].append(link_info)
-                                    
-                        except Exception as e:
-                            print(f"⚠️ Erro ao processar link: {e}")
-                            continue
-                    
-                    links_data["total_links"] = len(links_data["links"])
-                    
-                    # Usar os dados detalhados das partidas como resultado principal
-                    print(f"✅ Partidas de FUTEBOL com detalhes extraídos: {len(detailed_matches)}")
-                    
-                    # Mostrar estatísticas resumidas
-                    print(f"📊 Links gerais: {links_data['total_links']} | Partidas detalhadas: {len(detailed_matches)}")
-                    
-                    # Mostrar apenas algumas partidas como exemplo
-                    if detailed_matches:
-                        print("⚽ Exemplos de partidas extraídas:")
-                        for i, match in enumerate(detailed_matches[:3]):  # Mostrar apenas 3 exemplos
-                            status_emoji = {
-                                "not_started": "⏳",
-                                "in_progress": "🔴",
-                                "finished": "✅",
-                                "postponed": "⏸️"
-                            }.get(match.get('match_status', 'N/A'), "❓")
-                            
-                            print(f"  {i+1}. {status_emoji} {match.get('home_team', 'N/A')} vs {match.get('away_team', 'N/A')} - {match.get('match_time', 'N/A')}")
-                        
-                        if len(detailed_matches) > 3:
-                            print(f"  ... e mais {len(detailed_matches) - 3} partidas")
-                    
-                    # Salvar no banco de dados (usar detailed_matches em vez de filtered_links)
+                    # Salvar no banco de dados
                     if detailed_matches:
                         try:
                             record_id = await self.database.save_filtered_links(
-                                collection_timestamp=links_data["collected_at"],
+                                collection_timestamp=datetime.now().isoformat(),
                                 source_file="homepage_api_collection_detailed",
                                 pattern_used="detailed_football_matches",
                                 links_data=detailed_matches
@@ -870,25 +793,13 @@ class SofaScoreLinksService:
                     
                     return {
                         "success": True,
-                        "message": f"Coletados {links_data['total_links']} links gerais, extraídos detalhes de {len(detailed_matches)} partidas de FUTEBOL",
+                        "message": f"Extraídos detalhes de {len(detailed_matches)} partidas de FUTEBOL",
                         "data": {
-                            "collected_at": links_data["collected_at"],
+                            "collected_at": datetime.now().isoformat(),
                             "homepage_url": homepage_url,
-                            "total_links": links_data["total_links"],
-                            "categories_stats": {
-                                "matches": len(links_data["categories"]["matches"]),
-                                "teams": len(links_data["categories"]["teams"]),
-                                "tournaments": len(links_data["categories"]["tournaments"]),
-                                "players": len(links_data["categories"]["players"]),
-                                "other": len(links_data["categories"]["other"])
-                            },
                             "extraction_method": "detailed_football_matches",
                             "total_detailed_matches": len(detailed_matches),
                             "detailed_matches": detailed_matches,
-                            "match_details_included": [
-                                "home_team", "away_team", "home_score", "away_score", 
-                                "match_time", "match_status", "url"
-                            ],
                             "record_id": record_id
                         },
                         "timestamp": datetime.now()
@@ -934,6 +845,8 @@ class SofaScoreLinksService:
     
     async def extract_match_details_from_container(self, match_container):
         """Extrai informações detalhadas de uma partida do container HTML - VERSÃO ROBUSTA"""
+        print("🔍 [EXTRACT-DETAILS] Iniciando extração de detalhes da partida...")
+        
         match_details = {
             "home_team": "N/A",
             "away_team": "N/A", 
@@ -944,6 +857,8 @@ class SofaScoreLinksService:
         }
         
         try:
+            print("🏷️ [EXTRACT-DETAILS] Tentando extrair nomes dos times...")
+            
             # 1. EXTRAIR NOMES DOS TIMES (MÚLTIPLOS SELETORES)
             # Para jogos normais: <bdi color="onSurface.nLv1" class="Text ezSveL">Vila Nova</bdi>
             # Para jogos finalizados: <bdi color="onSurface.nLv3" class="Text kwIkWN">Derry City</bdi>
@@ -953,45 +868,106 @@ class SofaScoreLinksService:
             ]
             
             teams_found = []
-            for selector in team_selectors:
+            for i, selector in enumerate(team_selectors):
+                print(f"🔍 [EXTRACT-DETAILS] Testando seletor {i+1}: {selector}")
                 team_elements = match_container.locator(selector)
                 team_count = await team_elements.count()
+                print(f"📊 [EXTRACT-DETAILS] Encontrados {team_count} elementos com seletor {selector}")
                 
-                for i in range(team_count):
-                    team_text = await team_elements.nth(i).text_content()
+                for j in range(team_count):
+                    team_text = await team_elements.nth(j).text_content()
+                    print(f"📝 [EXTRACT-DETAILS] Texto do time {j+1}: '{team_text}'")
                     if team_text and team_text.strip():
                         teams_found.append(team_text.strip())
+                        print(f"✅ [EXTRACT-DETAILS] Time válido adicionado: '{team_text.strip()}'")
                 
                 # Se encontrou pelo menos 2 times com este seletor, usar
                 if len(teams_found) >= 2:
+                    print(f"🎯 [EXTRACT-DETAILS] Encontrados {len(teams_found)} times com seletor {selector}")
                     break
+            
+            print(f"📋 [EXTRACT-DETAILS] Total de times encontrados: {len(teams_found)} - {teams_found}")
             
             # Se encontrou pelo menos 2 times, usar os primeiros dois
             if len(teams_found) >= 2:
                 match_details["home_team"] = teams_found[0]
                 match_details["away_team"] = teams_found[1]
+                print(f"✅ [EXTRACT-DETAILS] Times definidos: {teams_found[0]} vs {teams_found[1]}")
             else:
-                # Se não encontrou times suficientes, retornar dados inválidos
-                return match_details
+                # Se não encontrou times suficientes, tentar seletores alternativos
+                print("⚠️ [EXTRACT-DETAILS] Não encontrou times com seletores principais, tentando alternativos...")
+                
+                # Tentar seletores mais genéricos
+                alternative_selectors = [
+                    'bdi.Text',  # Mais genérico
+                    'span[class*="Text"]',  # Elementos span com classe Text
+                    '[class*="team"]',  # Qualquer elemento com "team" na classe
+                    'div[class*="participant"]'  # Elementos com "participant"
+                ]
+                
+                for alt_selector in alternative_selectors:
+                    print(f"🔄 [EXTRACT-DETAILS] Tentando seletor alternativo: {alt_selector}")
+                    alt_elements = match_container.locator(alt_selector)
+                    alt_count = await alt_elements.count()
+                    print(f"📊 [EXTRACT-DETAILS] Encontrados {alt_count} elementos alternativos")
+                    
+                    alt_teams = []
+                    for k in range(min(alt_count, 10)):  # Limitar a 10 elementos para não sobrecarregar
+                        alt_text = await alt_elements.nth(k).text_content()
+                        if alt_text and alt_text.strip() and len(alt_text.strip()) > 2:
+                            alt_teams.append(alt_text.strip())
+                            print(f"📝 [EXTRACT-DETAILS] Texto alternativo {k+1}: '{alt_text.strip()}'")
+                    
+                    if len(alt_teams) >= 2:
+                        # Filtrar textos que parecem ser nomes de times
+                        valid_teams = []
+                        for team in alt_teams:
+                            # Evitar textos genéricos
+                            if not any(generic in team.lower() for generic in ['match', 'vs', 'live', 'finished', 'min', 'goal']):
+                                valid_teams.append(team)
+                        
+                        if len(valid_teams) >= 2:
+                            match_details["home_team"] = valid_teams[0]
+                            match_details["away_team"] = valid_teams[1]
+                            print(f"✅ [EXTRACT-DETAILS] Times encontrados com seletor alternativo: {valid_teams[0]} vs {valid_teams[1]}")
+                            break
+                
+                if match_details["home_team"] == "N/A":
+                    print("❌ [EXTRACT-DETAILS] Não foi possível extrair nomes dos times")
+                    # Tentar extrair HTML do container para debug
+                    try:
+                        container_html = await match_container.inner_html()
+                        print(f"🔍 [EXTRACT-DETAILS] HTML do container (primeiros 500 chars): {container_html[:500]}...")
+                    except:
+                        print("⚠️ [EXTRACT-DETAILS] Não foi possível extrair HTML do container")
+                    return match_details
             
             # 2. EXTRAIR TEMPO DA PARTIDA
-            # Baseado no padrão: <bdi font-size="12" color="onSurface.nLv3" class="Text kcRyBI">15:45</bdi>
+            print("⏰ [EXTRACT-DETAILS] Tentando extrair tempo da partida...")
             time_element = match_container.locator('bdi.Text.kcRyBI').first
             if await time_element.count() > 0:
                 time_text = await time_element.text_content()
                 if time_text and time_text.strip():
                     match_details["match_time"] = time_text.strip()
+                    print(f"✅ [EXTRACT-DETAILS] Tempo extraído: {time_text.strip()}")
+            else:
+                print("⚠️ [EXTRACT-DETAILS] Não encontrou elemento de tempo")
             
             # 3. EXTRAIR STATUS E PLACAR BASEADO NO CONTEXTO
+            print("🏆 [EXTRACT-DETAILS] Tentando extrair status e placar...")
             # Verificar o atributo title do container principal para identificar status
             title_element = match_container.locator('[title]').first
             title_text = ""
             if await title_element.count() > 0:
                 title_text = await title_element.get_attribute('title') or ""
+                print(f"🏷️ [EXTRACT-DETAILS] Título encontrado: '{title_text}'")
+            else:
+                print("⚠️ [EXTRACT-DETAILS] Não encontrou elemento com título")
             
             # 4. IDENTIFICAR STATUS DA PARTIDA E EXTRAIR PLACARES
             if "F2°T" in title_text:
                 match_details["match_status"] = "finished"
+                print("🏁 [EXTRACT-DETAILS] Partida finalizada detectada")
                 # Para jogos finalizados, extrair placar dos elementos específicos
                 await self._extract_finished_match_scores(match_container, match_details)
                 
@@ -999,9 +975,11 @@ class SofaScoreLinksService:
                 match_details["match_status"] = "postponed"
                 match_details["home_score"] = "Adiado"
                 match_details["away_score"] = "Adiado"
+                print("⏸️ [EXTRACT-DETAILS] Partida adiada detectada")
                 
             elif "2º" in title_text or await self._is_live_match(match_container):
                 match_details["match_status"] = "in_progress"
+                print("🔴 [EXTRACT-DETAILS] Partida ao vivo detectada")
                 # Para jogos ao vivo, extrair placar e tempo atual
                 await self._extract_live_match_data(match_container, match_details)
                 
@@ -1009,10 +987,15 @@ class SofaScoreLinksService:
                 match_details["match_status"] = "not_started"
                 match_details["home_score"] = "0"
                 match_details["away_score"] = "0"
+                print("⏳ [EXTRACT-DETAILS] Partida não iniciada detectada")
             
+            print(f"📋 [EXTRACT-DETAILS] Resultado final: {match_details}")
             return match_details
             
-        except Exception:
+        except Exception as e:
+            print(f"❌ [EXTRACT-DETAILS] Erro durante extração: {type(e).__name__}: {str(e)}")
+            import traceback
+            print(f"📋 [EXTRACT-DETAILS] Traceback: {traceback.format_exc()}")
             # Retornar dados inválidos em caso de erro (partida será ignorada)
             return {
                 "home_team": "N/A",
