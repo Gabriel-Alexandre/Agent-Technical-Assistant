@@ -1,7 +1,7 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import Layout from '@/components/Layout';
 import { 
   ArrowLeft, 
@@ -78,7 +78,7 @@ interface HistoryAnalysis {
   updated_at: string;
 }
 
-export default function AnalyseSugestoesPage() {
+function AnalyseSugestoesContent() {
   const searchParams = useSearchParams();
   
   // Parâmetros da URL
@@ -647,5 +647,13 @@ export default function AnalyseSugestoesPage() {
         )}
       </div>
     </Layout>
+  );
+}
+
+export default function AnalyseSugestoesPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <AnalyseSugestoesContent />
+    </Suspense>
   );
 } 
