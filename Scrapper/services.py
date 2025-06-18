@@ -899,6 +899,8 @@ class SofaScoreLinksService:
                 
                 # Tentar seletores mais genéricos
                 alternative_selectors = [
+                    'bdi.textStyle_body\\.small',  # Para nova estrutura HTML (containers 25-40)
+                    'bdi[class*="textStyle_body"]',  # Seletor mais genérico para nova estrutura
                     'bdi.Text',  # Mais genérico
                     'span[class*="Text"]',  # Elementos span com classe Text
                     '[class*="team"]',  # Qualquer elemento com "team" na classe
@@ -906,17 +908,16 @@ class SofaScoreLinksService:
                 ]
                 
                 for alt_selector in alternative_selectors:
-                    print(f"🔄 [EXTRACT-DETAILS] Tentando seletor alternativo: {alt_selector}")
                     alt_elements = match_container.locator(alt_selector)
                     alt_count = await alt_elements.count()
-                    print(f"📊 [EXTRACT-DETAILS] Encontrados {alt_count} elementos alternativos")
+                    if alt_count > 0:
+                        print(f"🔄 [EXTRACT-DETAILS] Testando {alt_selector}: {alt_count} elementos")
                     
                     alt_teams = []
                     for k in range(min(alt_count, 10)):  # Limitar a 10 elementos para não sobrecarregar
                         alt_text = await alt_elements.nth(k).text_content()
                         if alt_text and alt_text.strip() and len(alt_text.strip()) > 2:
                             alt_teams.append(alt_text.strip())
-                            print(f"📝 [EXTRACT-DETAILS] Texto alternativo {k+1}: '{alt_text.strip()}'")
                     
                     if len(alt_teams) >= 2:
                         # Filtrar textos que parecem ser nomes de times
@@ -933,28 +934,45 @@ class SofaScoreLinksService:
                             break
                 
                 if match_details["home_team"] == "N/A":
-                    print("❌ [EXTRACT-DETAILS] Não foi possível extrair nomes dos times")
-                    # Tentar extrair HTML do container para debug
+                    # Estratégia para ambientes de produção: tentar extrair do texto simples
                     try:
-                        container_html = await match_container.inner_html()
-                        print(f"🔍 [EXTRACT-DETAILS] HTML do container (primeiros 500 chars): {container_html[:500]}...")
-                    except:
-                        print("⚠️ [EXTRACT-DETAILS] Não foi possível extrair HTML do container")
-                    return match_details
+                        container_text = await match_container.text_content()
+                        print(f"🔍 [EXTRACT-DETAILS] Texto do container: '{container_text}'")
+                        
+                        # Se o texto contém " - " (formato: "Team1 - Team2"), extrair times
+                        if container_text and " - " in container_text:
+                            teams = container_text.split(" - ")
+                            if len(teams) >= 2:
+                                match_details["home_team"] = teams[0].strip()
+                                match_details["away_team"] = teams[1].strip()
+                                print(f"✅ [EXTRACT-DETAILS] Times extraídos do texto: {teams[0]} vs {teams[1]}")
+                        
+                        # Se ainda não encontrou, tentar extrair HTML completo para debug
+                        if match_details["home_team"] == "N/A":
+                            container_html = await match_container.inner_html()
+                            print(f"🔍 [EXTRACT-DETAILS] HTML completo do container: {container_html}")
+                            
+                    except Exception as e:
+                        print(f"⚠️ [EXTRACT-DETAILS] Erro ao extrair texto/HTML: {e}")
+                    
+                    # Se ainda não conseguiu extrair, retornar dados inválidos
+                    if match_details["home_team"] == "N/A":
+                        print("❌ [EXTRACT-DETAILS] Não foi possível extrair nomes dos times")
+                        return match_details
             
             # 2. EXTRAIR TEMPO DA PARTIDA
-            print("⏰ [EXTRACT-DETAILS] Tentando extrair tempo da partida...")
+            # Remover log: print("⏰ [EXTRACT-DETAILS] Tentando extrair tempo da partida...")
             time_element = match_container.locator('bdi.Text.kcRyBI').first
             if await time_element.count() > 0:
                 time_text = await time_element.text_content()
                 if time_text and time_text.strip():
                     match_details["match_time"] = time_text.strip()
-                    print(f"✅ [EXTRACT-DETAILS] Tempo extraído: {time_text.strip()}")
-            else:
-                print("⚠️ [EXTRACT-DETAILS] Não encontrou elemento de tempo")
+                    # Remover log: print(f"✅ [EXTRACT-DETAILS] Tempo extraído: {time_text.strip()}")
+            # else:
+                # Remover log: print("⚠️ [EXTRACT-DETAILS] Não encontrou elemento de tempo")
             
             # 3. EXTRAIR STATUS E PLACAR BASEADO NO CONTEXTO
-            print("🏆 [EXTRACT-DETAILS] Tentando extrair status e placar...")
+            # Remover log: print("🏆 [EXTRACT-DETAILS] Tentando extrair status e placar...")
             # Verificar o atributo title do container principal para identificar status
             title_element = match_container.locator('[title]').first
             title_text = ""
