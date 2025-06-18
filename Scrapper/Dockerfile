@@ -91,8 +91,8 @@ RUN python -c "from playwright.sync_api import sync_playwright; p = sync_playwri
 EXPOSE $PORT
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=40s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
+# HEALTHCHECK --interval=30s --timeout=30s --start-period=40s --retries=3 \
+#     CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
 
 # Definir entrypoint e comando
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

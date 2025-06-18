@@ -526,22 +526,42 @@ async def collect_links():
     - Sistema otimizado para diferentes layouts do SofaScore
     """
     try:
-        print("⚽ Iniciando coleta DETALHADA de partidas de FUTEBOL do SofaScore...")
+        print("🚀 [COLLECT-LINKS] Iniciando rota /sofascore/collect-links")
+        print(f"🔍 [COLLECT-LINKS] Timestamp: {datetime.now()}")
+        print(f"🔧 [COLLECT-LINKS] Verificando se links_service está inicializado: {links_service is not None}")
+        
+        if links_service is None:
+            print("❌ [COLLECT-LINKS] ERRO: links_service não foi inicializado!")
+            raise HTTPException(
+                status_code=500,
+                detail="Serviço de coleta de links não foi inicializado corretamente"
+            )
+        
+        print("⚽ [COLLECT-LINKS] Iniciando coleta DETALHADA de partidas de FUTEBOL do SofaScore...")
         
         # Coletar informações detalhadas das partidas (apenas futebol)
+        print("🔄 [COLLECT-LINKS] Chamando links_service.collect_and_filter_links()...")
         result = await links_service.collect_and_filter_links()
         
+        print(f"✅ [COLLECT-LINKS] Resultado recebido: success={result.get('success', 'N/A')}")
+        
         if result["success"]:
+            print(f"🎉 [COLLECT-LINKS] Coleta bem-sucedida! Retornando resposta...")
             return LinksCollectionResponse(**result)
         else:
+            print(f"❌ [COLLECT-LINKS] Coleta falhou: {result.get('message', 'Erro desconhecido')}")
             raise HTTPException(
                 status_code=500,
                 detail=result["message"]
             )
     
-    except HTTPException:
+    except HTTPException as he:
+        print(f"⚠️ [COLLECT-LINKS] HTTPException capturada: {he.detail}")
         raise
     except Exception as e:
+        print(f"💥 [COLLECT-LINKS] Exceção não tratada: {type(e).__name__}: {str(e)}")
+        import traceback
+        print(f"📋 [COLLECT-LINKS] Traceback completo:\n{traceback.format_exc()}")
         raise HTTPException(
             status_code=500,
             detail=f"Erro interno na coleta detalhada de partidas de futebol: {str(e)}"

@@ -618,266 +618,307 @@ class SofaScoreLinksService:
     """Serviço para coleta de links do SofaScore"""
     
     def __init__(self):
+        print("🔧 [LINKS-SERVICE] Inicializando SofaScoreLinksService...")
         self.website_url = "https://www.sofascore.com/"
         self.database = DatabaseService()
+        print("✅ [LINKS-SERVICE] SofaScoreLinksService inicializado com sucesso!")
     
     async def create_browser_context(self, playwright):
         """Cria contexto do navegador com configurações realistas"""
-        browser = await playwright.chromium.launch(
-            headless=True,
-            args=[
-                '--no-sandbox',
-                '--disable-blink-features=AutomationControlled',
-                '--disable-web-security',
-                '--disable-features=VizDisplayCompositor',
-                '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            ]
-        )
+        print("🚀 [BROWSER-CONTEXT] Iniciando criação do contexto do navegador...")
+        print("🔧 [BROWSER-CONTEXT] Configurações: headless=True, args com sandbox desabilitado")
         
-        context = await browser.new_context(
-            viewport={'width': 1920, 'height': 1080},
-            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            locale='pt-BR',
-            timezone_id='America/Sao_Paulo',
-            extra_http_headers={
-                'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'DNT': '1',
-                'Connection': 'keep-alive',
-                'Upgrade-Insecure-Requests': '1'
-            }
-        )
+        try:
+            browser = await playwright.chromium.launch(
+                headless=True,
+                args=[
+                    '--no-sandbox',
+                    '--disable-blink-features=AutomationControlled',
+                    '--disable-web-security',
+                    '--disable-features=VizDisplayCompositor',
+                    '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                ]
+            )
+            print("✅ [BROWSER-CONTEXT] Navegador Chromium lançado com sucesso!")
+        except Exception as e:
+            print(f"❌ [BROWSER-CONTEXT] Erro ao lançar Chromium: {type(e).__name__}: {str(e)}")
+            raise
+        
+        try:
+            context = await browser.new_context(
+                viewport={'width': 1920, 'height': 1080},
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                locale='pt-BR',
+                timezone_id='America/Sao_Paulo',
+                extra_http_headers={
+                    'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    'DNT': '1',
+                    'Connection': 'keep-alive',
+                    'Upgrade-Insecure-Requests': '1'
+                }
+            )
+            print("✅ [BROWSER-CONTEXT] Contexto do navegador criado com sucesso!")
+        except Exception as e:
+            print(f"❌ [BROWSER-CONTEXT] Erro ao criar contexto: {type(e).__name__}: {str(e)}")
+            await browser.close()
+            raise
         
         return browser, context
     
     async def collect_and_filter_links(self) -> Dict[str, Any]:
         """Acessa a página inicial do SofaScore e coleta todos os links"""
-        async with async_playwright() as playwright:
-            browser, context = await self.create_browser_context(playwright)
-            page = await context.new_page()
-            
-            try:
-                print("🔄 Acessando página inicial do SofaScore...")
+        print("🚀 [LINKS-SERVICE] Iniciando collect_and_filter_links()")
+        
+        try:
+            print("🎭 [LINKS-SERVICE] Inicializando Playwright...")
+            async with async_playwright() as playwright:
+                print("🌐 [LINKS-SERVICE] Criando contexto do navegador...")
+                browser, context = await self.create_browser_context(playwright)
+                page = await context.new_page()
                 
-                # Acessar página inicial em português
-                homepage_url = "https://www.sofascore.com/pt/"
-                response = await page.goto(homepage_url, timeout=90000)
-                
-                if response.status != 200:
-                    print(f"❌ Erro ao acessar página inicial: Status {response.status}")
+                try:
+                    print("🔄 [LINKS-SERVICE] Acessando página inicial do SofaScore...")
+                    
+                    # Acessar página inicial em português
+                    homepage_url = "https://www.sofascore.com/pt/"
+                    print(f"🌍 [LINKS-SERVICE] URL de destino: {homepage_url}")
+                    print(f"⏰ [LINKS-SERVICE] Timeout configurado: 90000ms (90s)")
+                    
+                    response = await page.goto(homepage_url, timeout=90000)
+                    
+                    if response.status != 200:
+                        print(f"❌ [LINKS-SERVICE] Erro ao acessar página inicial: Status {response.status}")
+                        return {
+                            "success": False,
+                            "message": f"Erro ao acessar página inicial: Status {response.status}",
+                            "data": None,
+                            "timestamp": datetime.now()
+                        }
+                    
+                    print("✅ [LINKS-SERVICE] Página inicial carregada com sucesso!")
+                    
+                    # Aguardar carregamento completo
+                    print("⏳ [LINKS-SERVICE] Aguardando carregamento completo (3s)...")
+                    await asyncio.sleep(3)
+                    
+                    # Aceitar cookies se aparecer o banner
+                    try:
+                        cookie_button = page.locator('button:has-text("Accept"), button:has-text("Aceitar"), [data-testid="cookie-accept"]')
+                        if await cookie_button.count() > 0:
+                            await cookie_button.first.click()
+                            print("🍪 Cookies aceitos")
+                            await asyncio.sleep(1)
+                    except:
+                        pass  # Ignorar se não houver banner de cookies
+                    
+                    print("🔍 Coletando todos os links da página...")
+                    
+                    # Coletar todos os elementos <a> com href
+                    links_elements = await page.locator('a[href]').all()
+                    
+                    links_data = {
+                        "collected_at": datetime.now().isoformat(),
+                        "homepage_url": homepage_url,
+                        "total_links": 0,
+                        "links": [],
+                        "categories": {
+                            "matches": [],
+                            "teams": [],
+                            "tournaments": [],
+                            "players": [],
+                            "other": []
+                        }
+                    }
+                    
+                    # Buscar especificamente elementos de partida com informações detalhadas
+                    print("🔍 [LINKS-SERVICE] Buscando elementos de partidas de futebol...")
+                    match_containers = await page.locator('a[href*="/football/match/"]').all()
+                    print(f"📊 [LINKS-SERVICE] Encontrados {len(match_containers)} containers de partidas")
+                    
+                    detailed_matches = []
+                    processed_count = 0
+                    valid_matches_count = 0
+                    
+                    for match_container in match_containers:
+                        try:
+                            processed_count += 1
+                            
+                            # Extrair href e informações básicas
+                            href = await match_container.get_attribute('href')
+                            data_id = await match_container.get_attribute('data-id')
+                            
+                            if not href or '/football/' not in href:
+                                continue
+                                
+                            # Converter para URL completa
+                            if href.startswith('/'):
+                                full_url = f"https://www.sofascore.com{href}"
+                            else:
+                                full_url = href
+                            
+                            # Extrair informações detalhadas da partida
+                            match_details = await self.extract_match_details_from_container(match_container)
+                            
+                            # VALIDAÇÃO CRÍTICA: Ignorar partidas sem nomes de times identificados
+                            if (match_details.get("home_team") == "N/A" or 
+                                match_details.get("away_team") == "N/A" or
+                                not match_details.get("home_team") or 
+                                not match_details.get("away_team")):
+                                continue
+                            
+                            # Validar e limpar os dados extraídos
+                            match_details = self.validate_and_clean_match_data(match_details)
+                            
+                            # Adicionar informações básicas
+                            match_details.update({
+                                "url": full_url
+                            })
+                            
+                            detailed_matches.append(match_details)
+                            valid_matches_count += 1
+                            
+                        except Exception:
+                            continue
+                    
+                    print(f"⚽ Processados {processed_count} containers, {valid_matches_count} partidas válidas extraídas")
+                    
+                    # Processar links gerais para estatísticas (manter funcionalidade original)
+                    for link_element in links_elements:
+                        try:
+                            href = await link_element.get_attribute('href')
+                            text = await link_element.text_content()
+                            title = await link_element.get_attribute('title')
+                            
+                            if href:
+                                # Converter links relativos em absolutos
+                                if href.startswith('/'):
+                                    full_url = f"https://www.sofascore.com{href}"
+                                elif href.startswith('http'):
+                                    full_url = href
+                                else:
+                                    continue  # Pular links inválidos
+                                
+                                # Limpar texto
+                                text = text.strip() if text else ""
+                                title = title.strip() if title else ""
+                                
+                                link_info = {
+                                    "url": full_url,
+                                    "text": text,
+                                    "title": title,
+                                    "href_original": href
+                                }
+                                
+                                links_data["links"].append(link_info)
+                                
+                                # Categorizar links
+                                if '/match/' in href or '/game/' in href:
+                                    links_data["categories"]["matches"].append(link_info)
+                                elif '/team/' in href or '/club/' in href:
+                                    links_data["categories"]["teams"].append(link_info)
+                                elif '/tournament/' in href or '/league/' in href or '/competition/' in href:
+                                    links_data["categories"]["tournaments"].append(link_info)
+                                elif '/player/' in href:
+                                    links_data["categories"]["players"].append(link_info)
+                                else:
+                                    links_data["categories"]["other"].append(link_info)
+                                    
+                        except Exception as e:
+                            print(f"⚠️ Erro ao processar link: {e}")
+                            continue
+                    
+                    links_data["total_links"] = len(links_data["links"])
+                    
+                    # Usar os dados detalhados das partidas como resultado principal
+                    print(f"✅ Partidas de FUTEBOL com detalhes extraídos: {len(detailed_matches)}")
+                    
+                    # Mostrar estatísticas resumidas
+                    print(f"📊 Links gerais: {links_data['total_links']} | Partidas detalhadas: {len(detailed_matches)}")
+                    
+                    # Mostrar apenas algumas partidas como exemplo
+                    if detailed_matches:
+                        print("⚽ Exemplos de partidas extraídas:")
+                        for i, match in enumerate(detailed_matches[:3]):  # Mostrar apenas 3 exemplos
+                            status_emoji = {
+                                "not_started": "⏳",
+                                "in_progress": "🔴",
+                                "finished": "✅",
+                                "postponed": "⏸️"
+                            }.get(match.get('match_status', 'N/A'), "❓")
+                            
+                            print(f"  {i+1}. {status_emoji} {match.get('home_team', 'N/A')} vs {match.get('away_team', 'N/A')} - {match.get('match_time', 'N/A')}")
+                        
+                        if len(detailed_matches) > 3:
+                            print(f"  ... e mais {len(detailed_matches) - 3} partidas")
+                    
+                    # Salvar no banco de dados (usar detailed_matches em vez de filtered_links)
+                    if detailed_matches:
+                        try:
+                            record_id = await self.database.save_filtered_links(
+                                collection_timestamp=links_data["collected_at"],
+                                source_file="homepage_api_collection_detailed",
+                                pattern_used="detailed_football_matches",
+                                links_data=detailed_matches
+                            )
+                            print(f"💾 Partidas detalhadas salvas no banco com ID: {record_id}")
+                        except Exception as e:
+                            print(f"⚠️ Erro ao salvar no banco: {e}")
+                            record_id = None
+                    else:
+                        record_id = None
+                    
+                    return {
+                        "success": True,
+                        "message": f"Coletados {links_data['total_links']} links gerais, extraídos detalhes de {len(detailed_matches)} partidas de FUTEBOL",
+                        "data": {
+                            "collected_at": links_data["collected_at"],
+                            "homepage_url": homepage_url,
+                            "total_links": links_data["total_links"],
+                            "categories_stats": {
+                                "matches": len(links_data["categories"]["matches"]),
+                                "teams": len(links_data["categories"]["teams"]),
+                                "tournaments": len(links_data["categories"]["tournaments"]),
+                                "players": len(links_data["categories"]["players"]),
+                                "other": len(links_data["categories"]["other"])
+                            },
+                            "extraction_method": "detailed_football_matches",
+                            "total_detailed_matches": len(detailed_matches),
+                            "detailed_matches": detailed_matches,
+                            "match_details_included": [
+                                "home_team", "away_team", "home_score", "away_score", 
+                                "match_time", "match_status", "url"
+                            ],
+                            "record_id": record_id
+                        },
+                        "timestamp": datetime.now()
+                    }
+                    
+                except Exception as e:
+                    print(f"❌ [LINKS-SERVICE] Erro interno durante coleta: {type(e).__name__}: {str(e)}")
+                    import traceback
+                    print(f"📋 [LINKS-SERVICE] Traceback: {traceback.format_exc()}")
                     return {
                         "success": False,
-                        "message": f"Erro ao acessar página inicial: Status {response.status}",
+                        "message": f"Erro na coleta de links: {str(e)}",
                         "data": None,
                         "timestamp": datetime.now()
                     }
-                
-                print("✅ Página inicial carregada com sucesso!")
-                
-                # Aguardar carregamento completo
-                await asyncio.sleep(3)
-                
-                # Aceitar cookies se aparecer o banner
-                try:
-                    cookie_button = page.locator('button:has-text("Accept"), button:has-text("Aceitar"), [data-testid="cookie-accept"]')
-                    if await cookie_button.count() > 0:
-                        await cookie_button.first.click()
-                        print("🍪 Cookies aceitos")
-                        await asyncio.sleep(1)
-                except:
-                    pass  # Ignorar se não houver banner de cookies
-                
-                print("🔍 Coletando todos os links da página...")
-                
-                # Coletar todos os elementos <a> com href
-                links_elements = await page.locator('a[href]').all()
-                
-                links_data = {
-                    "collected_at": datetime.now().isoformat(),
-                    "homepage_url": homepage_url,
-                    "total_links": 0,
-                    "links": [],
-                    "categories": {
-                        "matches": [],
-                        "teams": [],
-                        "tournaments": [],
-                        "players": [],
-                        "other": []
-                    }
-                }
-                
-                # Buscar especificamente elementos de partida com informações detalhadas
-                match_containers = await page.locator('a[href*="/football/match/"]').all()
-                
-                detailed_matches = []
-                processed_count = 0
-                valid_matches_count = 0
-                
-                for match_container in match_containers:
-                    try:
-                        processed_count += 1
-                        
-                        # Extrair href e informações básicas
-                        href = await match_container.get_attribute('href')
-                        data_id = await match_container.get_attribute('data-id')
-                        
-                        if not href or '/football/' not in href:
-                            continue
-                            
-                        # Converter para URL completa
-                        if href.startswith('/'):
-                            full_url = f"https://www.sofascore.com{href}"
-                        else:
-                            full_url = href
-                        
-                        # Extrair informações detalhadas da partida
-                        match_details = await self.extract_match_details_from_container(match_container)
-                        
-                        # VALIDAÇÃO CRÍTICA: Ignorar partidas sem nomes de times identificados
-                        if (match_details.get("home_team") == "N/A" or 
-                            match_details.get("away_team") == "N/A" or
-                            not match_details.get("home_team") or 
-                            not match_details.get("away_team")):
-                            continue
-                        
-                        # Validar e limpar os dados extraídos
-                        match_details = self.validate_and_clean_match_data(match_details)
-                        
-                        # Adicionar informações básicas
-                        match_details.update({
-                            "url": full_url
-                        })
-                        
-                        detailed_matches.append(match_details)
-                        valid_matches_count += 1
-                        
-                    except Exception:
-                        continue
-                
-                print(f"⚽ Processados {processed_count} containers, {valid_matches_count} partidas válidas extraídas")
-                
-                # Processar links gerais para estatísticas (manter funcionalidade original)
-                for link_element in links_elements:
-                    try:
-                        href = await link_element.get_attribute('href')
-                        text = await link_element.text_content()
-                        title = await link_element.get_attribute('title')
-                        
-                        if href:
-                            # Converter links relativos em absolutos
-                            if href.startswith('/'):
-                                full_url = f"https://www.sofascore.com{href}"
-                            elif href.startswith('http'):
-                                full_url = href
-                            else:
-                                continue  # Pular links inválidos
-                            
-                            # Limpar texto
-                            text = text.strip() if text else ""
-                            title = title.strip() if title else ""
-                            
-                            link_info = {
-                                "url": full_url,
-                                "text": text,
-                                "title": title,
-                                "href_original": href
-                            }
-                            
-                            links_data["links"].append(link_info)
-                            
-                            # Categorizar links
-                            if '/match/' in href or '/game/' in href:
-                                links_data["categories"]["matches"].append(link_info)
-                            elif '/team/' in href or '/club/' in href:
-                                links_data["categories"]["teams"].append(link_info)
-                            elif '/tournament/' in href or '/league/' in href or '/competition/' in href:
-                                links_data["categories"]["tournaments"].append(link_info)
-                            elif '/player/' in href:
-                                links_data["categories"]["players"].append(link_info)
-                            else:
-                                links_data["categories"]["other"].append(link_info)
-                                
-                    except Exception as e:
-                        print(f"⚠️ Erro ao processar link: {e}")
-                        continue
-                
-                links_data["total_links"] = len(links_data["links"])
-                
-                # Usar os dados detalhados das partidas como resultado principal
-                print(f"✅ Partidas de FUTEBOL com detalhes extraídos: {len(detailed_matches)}")
-                
-                # Mostrar estatísticas resumidas
-                print(f"📊 Links gerais: {links_data['total_links']} | Partidas detalhadas: {len(detailed_matches)}")
-                
-                # Mostrar apenas algumas partidas como exemplo
-                if detailed_matches:
-                    print("⚽ Exemplos de partidas extraídas:")
-                    for i, match in enumerate(detailed_matches[:3]):  # Mostrar apenas 3 exemplos
-                        status_emoji = {
-                            "not_started": "⏳",
-                            "in_progress": "🔴",
-                            "finished": "✅",
-                            "postponed": "⏸️"
-                        }.get(match.get('match_status', 'N/A'), "❓")
-                        
-                        print(f"  {i+1}. {status_emoji} {match.get('home_team', 'N/A')} vs {match.get('away_team', 'N/A')} - {match.get('match_time', 'N/A')}")
                     
-                    if len(detailed_matches) > 3:
-                        print(f"  ... e mais {len(detailed_matches) - 3} partidas")
-                
-                # Salvar no banco de dados (usar detailed_matches em vez de filtered_links)
-                if detailed_matches:
-                    try:
-                        record_id = await self.database.save_filtered_links(
-                            collection_timestamp=links_data["collected_at"],
-                            source_file="homepage_api_collection_detailed",
-                            pattern_used="detailed_football_matches",
-                            links_data=detailed_matches
-                        )
-                        print(f"💾 Partidas detalhadas salvas no banco com ID: {record_id}")
-                    except Exception as e:
-                        print(f"⚠️ Erro ao salvar no banco: {e}")
-                        record_id = None
-                else:
-                    record_id = None
-                
-                return {
-                    "success": True,
-                    "message": f"Coletados {links_data['total_links']} links gerais, extraídos detalhes de {len(detailed_matches)} partidas de FUTEBOL",
-                    "data": {
-                        "collected_at": links_data["collected_at"],
-                        "homepage_url": homepage_url,
-                        "total_links": links_data["total_links"],
-                        "categories_stats": {
-                            "matches": len(links_data["categories"]["matches"]),
-                            "teams": len(links_data["categories"]["teams"]),
-                            "tournaments": len(links_data["categories"]["tournaments"]),
-                            "players": len(links_data["categories"]["players"]),
-                            "other": len(links_data["categories"]["other"])
-                        },
-                        "extraction_method": "detailed_football_matches",
-                        "total_detailed_matches": len(detailed_matches),
-                        "detailed_matches": detailed_matches,
-                        "match_details_included": [
-                            "home_team", "away_team", "home_score", "away_score", 
-                            "match_time", "match_status", "url"
-                        ],
-                        "record_id": record_id
-                    },
-                    "timestamp": datetime.now()
-                }
-                
-            except Exception as e:
-                print(f"❌ Erro ao coletar links: {e}")
-                return {
-                    "success": False,
-                    "message": f"Erro na coleta de links: {str(e)}",
-                    "data": None,
-                    "timestamp": datetime.now()
-                }
-                
-            finally:
-                await browser.close()
+                finally:
+                    print("🔄 [LINKS-SERVICE] Fechando navegador...")
+                    await browser.close()
+                    
+        except Exception as e:
+            print(f"💥 [LINKS-SERVICE] Erro crítico na inicialização do Playwright: {type(e).__name__}: {str(e)}")
+            import traceback
+            print(f"📋 [LINKS-SERVICE] Traceback completo: {traceback.format_exc()}")
+            return {
+                "success": False,
+                "message": f"Erro crítico na inicialização: {str(e)}",
+                "data": None,
+                "timestamp": datetime.now()
+            }
     
     def extract_match_id_from_url(self, url):
         """Extrai o ID da partida da URL"""
