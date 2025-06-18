@@ -835,7 +835,7 @@ class SofaScoreLinksService:
 
     
     async def extract_match_details_from_container(self, match_container):
-        """Extrai informações detalhadas de uma partida do container HTML - VERSÃO CORRIGIDA"""
+        """Extrai informações detalhadas de uma partida do container HTML - VERSÃO MELHORADA PARA DEPLOY"""
         
         match_details = {
             "home_team": "N/A",
@@ -852,208 +852,214 @@ class SofaScoreLinksService:
             
             if container_text:
                 clean_text = container_text.strip()
-                print(f"📝 [EXTRACT] Analisando: '{clean_text}'")
+                print(f"📝 [EXTRACT] Analisando texto: '{clean_text}'")
                 
-                # FORMATO REAL 1: "19:30F2°TVolta RedondaAvaí1111" (partidas finalizadas)
-                print(f"🔍 [EXTRACT] Testando FORMATO 1 (F2°T)...")
-                # Fazer o padrão mais flexível para lidar com caracteres especiais
-                finished_pattern = re.search(r'(\d{1,2}:\d{2})F\d+[°º]?T(.+?)(\d)(\d)(\d)(\d)$', clean_text)
-                if finished_pattern:
-                    print(f"✅ [EXTRACT] FORMATO 1 encontrado!")
-                    time_str = finished_pattern.group(1)
-                    teams_str = finished_pattern.group(2)
-                    scores = finished_pattern.group(3) + finished_pattern.group(4) + finished_pattern.group(5) + finished_pattern.group(6)
-                    
-                    print(f"🔍 [EXTRACT] Time: {time_str}, Teams: {teams_str}, Scores: {scores}")
-                    
-                    # Extrair times e placares do formato compacto
-                    # Exemplo: "Volta RedondaAvaí1111" -> "Volta Redonda" vs "Avaí" (1-1, 1-1)
-                    if len(scores) == 4:
-                        home_score = scores[0]
-                        away_score = scores[1]
+                # NOVO PADRÃO 1: Partidas finalizadas com pontuação específica
+                # Exemplo: "19:30F2°TVolta RedondaAvaí1111" ou "F2°TVolta RedondaAvaí1111"
+                print(f"🔍 [EXTRACT] Testando PADRÃO FINALIZADO MELHORADO...")
+                finished_patterns = [
+                    r'(\d{1,2}:\d{2})?F\d+[°º]?T(.+?)(\d)(\d)(\d)(\d)$',  # Com horário
+                    r'F\d+[°º]?T(.+?)(\d)(\d)(\d)(\d)$',  # Sem horário
+                    r'(\d{1,2}:\d{2})?FT(.+?)(\d)(\d)(\d)(\d)$',  # FT simples
+                    r'FT(.+?)(\d)(\d)(\d)(\d)$'  # FT sem horário
+                ]
+                
+                for i, pattern in enumerate(finished_patterns):
+                    finished_match = re.search(pattern, clean_text)
+                    if finished_match:
+                        print(f"✅ [EXTRACT] PADRÃO FINALIZADO {i+1} encontrado!")
                         
-                        # Tentar separar nomes dos times - procurar por maiúsculas no meio
+                        if len(finished_match.groups()) == 5:  # Com horário
+                            time_str = finished_match.group(1) or "FT"
+                            teams_str = finished_match.group(2)
+                            scores = finished_match.group(3) + finished_match.group(4) + finished_match.group(5) + finished_match.group(6)
+                        else:  # Sem horário
+                            time_str = "FT"
+                            teams_str = finished_match.group(1)
+                            scores = finished_match.group(2) + finished_match.group(3) + finished_match.group(4) + finished_match.group(5)
+                        
+                        print(f"🔍 [EXTRACT] Time: {time_str}, Teams: '{teams_str}', Scores: {scores}")
+                        
+                        if len(scores) == 4:
+                            home_score = scores[0]
+                            away_score = scores[1]
+                            
+                            teams_split = self._split_team_names(teams_str)
+                            if teams_split:
+                                home_team, away_team = teams_split
+                                match_details.update({
+                                    "home_team": home_team,
+                                    "away_team": away_team,
+                                    "home_score": home_score,
+                                    "away_score": away_score,
+                                    "match_time": "FT",
+                                    "match_status": "finished"
+                                })
+                                print(f"🏁 FINISHED: {home_team} {home_score}-{away_score} {away_team} (FT)")
+                                return match_details
+                        break
+                
+                # NOVO PADRÃO 2: Partidas ao vivo melhoradas
+                # Exemplo: "22:0024'MonterreyInter0000" ou "24'MonterreyInter0000"
+                print(f"🔍 [EXTRACT] Testando PADRÃO AO VIVO MELHORADO...")
+                live_patterns = [
+                    r'(\d{1,2}:\d{2})(\d+)\'(.+?)(\d)(\d)(\d)(\d)$',  # Com horário inicial
+                    r'(\d+)\'(.+?)(\d)(\d)(\d)(\d)$',  # Apenas minuto
+                    r'(\d{1,2}:\d{2})(\d+)\"(.+?)(\d)(\d)(\d)(\d)$',  # Com aspas duplas
+                    r'(\d+)\"(.+?)(\d)(\d)(\d)(\d)$'  # Apenas minuto com aspas duplas
+                ]
+                
+                for i, pattern in enumerate(live_patterns):
+                    live_match = re.search(pattern, clean_text)
+                    if live_match:
+                        print(f"✅ [EXTRACT] PADRÃO AO VIVO {i+1} encontrado!")
+                        
+                        if len(live_match.groups()) == 6:  # Com horário inicial
+                            time_str = live_match.group(1)
+                            minute = live_match.group(2)
+                            teams_str = live_match.group(3)
+                            scores = live_match.group(4) + live_match.group(5) + live_match.group(6) + live_match.group(7)
+                        else:  # Apenas minuto
+                            time_str = "Live"
+                            minute = live_match.group(1)
+                            teams_str = live_match.group(2)
+                            scores = live_match.group(3) + live_match.group(4) + live_match.group(5) + live_match.group(6)
+                        
+                        print(f"🔍 [EXTRACT] Time: {time_str}, Minute: {minute}, Teams: '{teams_str}', Scores: {scores}")
+                        
+                        if len(scores) == 4:
+                            home_score = scores[0]
+                            away_score = scores[1]
+                            
+                            teams_split = self._split_team_names(teams_str)
+                            if teams_split:
+                                home_team, away_team = teams_split
+                                match_details.update({
+                                    "home_team": home_team,
+                                    "away_team": away_team,
+                                    "home_score": home_score,
+                                    "away_score": away_score,
+                                    "match_time": f"{minute}'",
+                                    "match_status": "in_progress"
+                                })
+                                print(f"🔴 LIVE: {home_team} {home_score}-{away_score} {away_team} ({minute}')")
+                                return match_details
+                        break
+                
+                # NOVO PADRÃO 3: Partidas com placar explícito
+                # Exemplo: "Fluminense 2 - 1 Botafogo" ou "Fluminense2-1Botafogo"
+                print(f"🔍 [EXTRACT] Testando PADRÃO PLACAR EXPLÍCITO...")
+                score_patterns = [
+                    r'(.+?)\s*(\d+)\s*-\s*(\d+)\s*(.+?)$',  # Com espaços
+                    r'(.+?)(\d+)-(\d+)(.+?)$',  # Sem espaços
+                    r'(.+?)\s*(\d+)\s*x\s*(\d+)\s*(.+?)$',  # Com x
+                    r'(.+?)(\d+)x(\d+)(.+?)$'  # x sem espaços
+                ]
+                
+                for i, pattern in enumerate(score_patterns):
+                    score_match = re.search(pattern, clean_text)
+                    if score_match:
+                        print(f"✅ [EXTRACT] PADRÃO PLACAR {i+1} encontrado!")
+                        
+                        home_team = score_match.group(1).strip()
+                        home_score = score_match.group(2)
+                        away_score = score_match.group(3)
+                        away_team = score_match.group(4).strip()
+                        
+                        print(f"🔍 [EXTRACT] Home: '{home_team}', Away: '{away_team}', Score: {home_score}-{away_score}")
+                        
+                        # Validar se são nomes válidos de times
+                        if len(home_team) >= 3 and len(away_team) >= 3:
+                            # Determinar status baseado no contexto
+                            status = "finished"
+                            if "ao vivo" in clean_text.lower() or "live" in clean_text.lower():
+                                status = "in_progress"
+                            elif "'" in clean_text or '"' in clean_text:
+                                status = "in_progress"
+                            
+                            match_details.update({
+                                "home_team": home_team,
+                                "away_team": away_team,
+                                "home_score": home_score,
+                                "away_score": away_score,
+                                "match_time": "FT" if status == "finished" else "Live",
+                                "match_status": status
+                            })
+                            print(f"⚽ SCORE: {home_team} {home_score}-{away_score} {away_team} ({status})")
+                            return match_details
+                        break
+                
+                # PADRÃO 4: Partidas agendadas melhoradas
+                # Exemplo: "23:30-CanadáHonduras" ou "23:30 Canadá x Honduras"
+                print(f"🔍 [EXTRACT] Testando PADRÃO AGENDADO MELHORADO...")
+                scheduled_patterns = [
+                    r'(\d{1,2}:\d{2})-(.+)$',  # Com hífen
+                    r'(\d{1,2}:\d{2})\s+(.+?)$',  # Com espaço
+                    r'(\d{1,2}:\d{2})\s*x\s*(.+?)$',  # Com x
+                    r'(\d{1,2}:\d{2})\s*vs\s*(.+?)$'  # Com vs
+                ]
+                
+                for i, pattern in enumerate(scheduled_patterns):
+                    scheduled_match = re.search(pattern, clean_text)
+                    if scheduled_match:
+                        print(f"✅ [EXTRACT] PADRÃO AGENDADO {i+1} encontrado!")
+                        
+                        time_str = scheduled_match.group(1)
+                        teams_str = scheduled_match.group(2)
+                        
+                        print(f"🔍 [EXTRACT] Time: {time_str}, Teams: '{teams_str}'")
+                        
                         teams_split = self._split_team_names(teams_str)
                         if teams_split:
                             home_team, away_team = teams_split
                             match_details.update({
                                 "home_team": home_team,
                                 "away_team": away_team,
-                                "home_score": home_score,
-                                "away_score": away_score,
-                                "match_time": "FT",
-                                "match_status": "finished"
+                                "match_time": time_str,
+                                "match_status": "scheduled"
                             })
-                            print(f"🏁 FINISHED: {home_team} {home_score}-{away_score} {away_team} (FT)")
+                            print(f"📅 SCHEDULED: {home_team} vs {away_team} ({time_str})")
                             return match_details
-                        else:
-                            print(f"❌ [EXTRACT] Não foi possível separar times: {teams_str}")
-                    else:
-                        print(f"❌ [EXTRACT] Scores inválidos: {scores}")
-                else:
-                    print(f"❌ [EXTRACT] FORMATO 1 não encontrado")
+                        break
                 
-                # FORMATO REAL 2: "22:0024'MonterreyInter0000" (partidas ao vivo)
-                print(f"🔍 [EXTRACT] Testando FORMATO 2 (ao vivo)...")
-                live_pattern = re.search(r'(\d{1,2}:\d{2})(\d+)\'(.+?)(\d)(\d)(\d)(\d)$', clean_text)
-                if live_pattern:
-                    print(f"✅ [EXTRACT] FORMATO 2 encontrado!")
-                    time_str = live_pattern.group(1)
-                    minute = live_pattern.group(2)
-                    teams_str = live_pattern.group(3)
-                    scores = live_pattern.group(4) + live_pattern.group(5) + live_pattern.group(6) + live_pattern.group(7)
-                    
-                    print(f"🔍 [EXTRACT] Time: {time_str}, Minute: {minute}, Teams: {teams_str}, Scores: {scores}")
-                    
-                    if len(scores) == 4:
-                        home_score = scores[0]
-                        away_score = scores[1]
+                # PADRÃO 5: Formato simples "Time A vs Time B" ou "Time A - Time B"
+                print(f"🔍 [EXTRACT] Testando PADRÃO SIMPLES MELHORADO...")
+                simple_patterns = [
+                    r'^([A-Za-zÀ-ÿ\s\.]+)\s*-\s*([A-Za-zÀ-ÿ\s\.]+)$',  # Com hífen
+                    r'^([A-Za-zÀ-ÿ\s\.]+)\s*vs\s*([A-Za-zÀ-ÿ\s\.]+)$',  # Com vs
+                    r'^([A-Za-zÀ-ÿ\s\.]+)\s*x\s*([A-Za-zÀ-ÿ\s\.]+)$'  # Com x
+                ]
+                
+                for i, pattern in enumerate(simple_patterns):
+                    simple_match = re.search(pattern, clean_text, re.IGNORECASE)
+                    if simple_match:
+                        print(f"✅ [EXTRACT] PADRÃO SIMPLES {i+1} encontrado!")
                         
-                        teams_split = self._split_team_names(teams_str)
-                        if teams_split:
-                            home_team, away_team = teams_split
+                        home_team = simple_match.group(1).strip()
+                        away_team = simple_match.group(2).strip()
+                        
+                        print(f"🔍 [EXTRACT] Home: '{home_team}', Away: '{away_team}'")
+                        
+                        # Validar se são nomes válidos de times
+                        if len(home_team) > 2 and len(away_team) > 2:
                             match_details.update({
                                 "home_team": home_team,
                                 "away_team": away_team,
-                                "home_score": home_score,
-                                "away_score": away_score,
-                                "match_time": f"{minute}'",
-                                "match_status": "in_progress"
+                                "home_score": "0",
+                                "away_score": "0",
+                                "match_status": "not_started"
                             })
-                            print(f"🔴 LIVE: {home_team} {home_score}-{away_score} {away_team} ({minute}')")
+                            print(f"⏳ NOT_STARTED: {home_team} vs {away_team}")
                             return match_details
-                        else:
-                            print(f"❌ [EXTRACT] Não foi possível separar times: {teams_str}")
-                    else:
-                        print(f"❌ [EXTRACT] Scores inválidos: {scores}")
-                else:
-                    print(f"❌ [EXTRACT] FORMATO 2 não encontrado")
+                        break
                 
-                # FORMATO ALTERNATIVO: Tentar extrair qualquer sequência com números
-                print(f"🔍 [EXTRACT] Testando FORMATO ALTERNATIVO...")
-                # Procurar por padrões como "TimeTeam1Team2Scores"
-                alt_pattern = re.search(r'(\d{1,2}:\d{2})[^0-9]*([A-Za-zÀ-ÿ\s]+)(\d{1,2})(\d{1,2})(\d{1,2})(\d{1,2})$', clean_text)
-                if alt_pattern:
-                    print(f"✅ [EXTRACT] FORMATO ALTERNATIVO encontrado!")
-                    time_str = alt_pattern.group(1)
-                    teams_str = alt_pattern.group(2)
-                    scores = alt_pattern.group(3) + alt_pattern.group(4) + alt_pattern.group(5) + alt_pattern.group(6)
-                    
-                    print(f"🔍 [EXTRACT] Time: {time_str}, Teams: {teams_str}, Scores: {scores}")
-                    
-                    if len(scores) == 4:
-                        home_score = scores[0]
-                        away_score = scores[1]
-                        
-                        teams_split = self._split_team_names(teams_str.strip())
-                        if teams_split:
-                            home_team, away_team = teams_split
-                            match_details.update({
-                                "home_team": home_team,
-                                "away_team": away_team,
-                                "home_score": home_score,
-                                "away_score": away_score,
-                                "match_time": "FT",
-                                "match_status": "finished"
-                            })
-                            print(f"🏁 ALT: {home_team} {home_score}-{away_score} {away_team}")
-                            return match_details
-                        else:
-                            print(f"❌ [EXTRACT] Não foi possível separar times: {teams_str}")
-                    else:
-                        print(f"❌ [EXTRACT] Scores inválidos: {scores}")
-                else:
-                    print(f"❌ [EXTRACT] FORMATO ALTERNATIVO não encontrado")
-                
-                # FORMATO REAL 3: "23:30-CanadáHonduras" (partidas agendadas)
-                print(f"🔍 [EXTRACT] Testando FORMATO 3 (agendadas)...")
-                scheduled_pattern = re.search(r'(\d{1,2}:\d{2})-(.+)$', clean_text)
-                if scheduled_pattern:
-                    print(f"✅ [EXTRACT] FORMATO 3 encontrado!")
-                    time_str = scheduled_pattern.group(1)
-                    teams_str = scheduled_pattern.group(2)
-                    
-                    print(f"🔍 [EXTRACT] Time: {time_str}, Teams: {teams_str}")
-                    
-                    teams_split = self._split_team_names(teams_str)
+                # PADRÃO 6: Formato compacto sem separadores claros
+                # Exemplo: "FluminenseBotafogo" ou "PaysanduAvai"
+                print(f"🔍 [EXTRACT] Testando PADRÃO COMPACTO...")
+                if len(clean_text) > 6 and clean_text.isalpha():
+                    teams_split = self._split_team_names(clean_text)
                     if teams_split:
                         home_team, away_team = teams_split
-                        match_details.update({
-                            "home_team": home_team,
-                            "away_team": away_team,
-                            "match_time": time_str,
-                            "match_status": "scheduled"
-                        })
-                        print(f"📅 SCHEDULED: {home_team} vs {away_team} ({time_str})")
-                        return match_details
-                    else:
-                        print(f"❌ [EXTRACT] Não foi possível separar times: {teams_str}")
-                else:
-                    print(f"❌ [EXTRACT] FORMATO 3 não encontrado")
-                
-                # FORMATO REAL 4: "Grupo F, Rodada 1Fluminense0 - 0F2°TDortmund" (partidas com contexto)
-                print(f"🔍 [EXTRACT] Testando FORMATO 4 (grupo)...")
-                group_pattern = re.search(r'Grupo [A-Z], Rodada \d+(.+?)(\d+) - (\d+)F2°T(.+)$', clean_text)
-                if group_pattern:
-                    print(f"✅ [EXTRACT] FORMATO 4 encontrado!")
-                    home_team = group_pattern.group(1).strip()
-                    home_score = group_pattern.group(2)
-                    away_score = group_pattern.group(3)
-                    away_team = group_pattern.group(4).strip()
-                    
-                    print(f"🔍 [EXTRACT] Home: {home_team}, Away: {away_team}, Score: {home_score}-{away_score}")
-                    
-                    match_details.update({
-                        "home_team": home_team,
-                        "away_team": away_team,
-                        "home_score": home_score,
-                        "away_score": away_score,
-                        "match_time": "FT",
-                        "match_status": "finished"
-                    })
-                    print(f"🏁 GROUP: {home_team} {home_score}-{away_score} {away_team}")
-                    return match_details
-                else:
-                    print(f"❌ [EXTRACT] FORMATO 4 não encontrado")
-                
-                # FORMATO REAL 5: "Ao vivoWest Chester UnitedLehigh Valley United" (partidas ao vivo sem placar)
-                print(f"🔍 [EXTRACT] Testando FORMATO 5 (ao vivo sem placar)...")
-                live_no_score_pattern = re.search(r'Ao vivo(.+)$', clean_text)
-                if live_no_score_pattern:
-                    print(f"✅ [EXTRACT] FORMATO 5 encontrado!")
-                    teams_str = live_no_score_pattern.group(1)
-                    
-                    print(f"🔍 [EXTRACT] Teams: {teams_str}")
-                    
-                    teams_split = self._split_team_names(teams_str)
-                    if teams_split:
-                        home_team, away_team = teams_split
-                        match_details.update({
-                            "home_team": home_team,
-                            "away_team": away_team,
-                            "home_score": "0",
-                            "away_score": "0",
-                            "match_status": "in_progress"
-                        })
-                        print(f"🔴 LIVE: {home_team} vs {away_team} (ao vivo)")
-                        return match_details
-                    else:
-                        print(f"❌ [EXTRACT] Não foi possível separar times: {teams_str}")
-                else:
-                    print(f"❌ [EXTRACT] FORMATO 5 não encontrado")
-                
-                # FORMATO REAL 6: "PSG - Atl. Madrid" (formato simples)
-                print(f"🔍 [EXTRACT] Testando FORMATO 6 (simples)...")
-                simple_pattern = re.search(r'^([A-Za-z\s\.]+) - ([A-Za-z\s\.]+)$', clean_text)
-                if simple_pattern:
-                    print(f"✅ [EXTRACT] FORMATO 6 encontrado!")
-                    home_team = simple_pattern.group(1).strip()
-                    away_team = simple_pattern.group(2).strip()
-                    
-                    print(f"🔍 [EXTRACT] Home: {home_team}, Away: {away_team}")
-                    
-                    # Validar se são nomes válidos de times
-                    if len(home_team) > 2 and len(away_team) > 2:
                         match_details.update({
                             "home_team": home_team,
                             "away_team": away_team,
@@ -1061,35 +1067,49 @@ class SofaScoreLinksService:
                             "away_score": "0",
                             "match_status": "not_started"
                         })
-                        print(f"⏳ NOT_STARTED: {home_team} vs {away_team}")
+                        print(f"🔤 COMPACT: {home_team} vs {away_team}")
                         return match_details
-                    else:
-                        print(f"❌ [EXTRACT] Nomes de times inválidos")
-                else:
-                    print(f"❌ [EXTRACT] FORMATO 6 não encontrado")
                 
                 print(f"❌ [EXTRACT] Nenhum formato reconhecido para: '{clean_text}'")
             
-            # 2. Se não conseguiu extrair do texto, mostrar HTML para debug
+            # 2. Se não conseguiu extrair do texto, tentar extrair do HTML
             if match_details["home_team"] == "N/A":
+                print(f"🔍 [EXTRACT] Tentando extrair do HTML...")
                 container_html = await match_container.inner_html()
-                print(f"🔍 [DEBUG] HTML: {container_html[:400]}...")
+                print(f"🔍 [DEBUG] HTML snippet: {container_html[:200]}...")
                 
-                # Tentar buscar por atributos específicos para entender a estrutura
-                all_elements = await match_container.locator('*').all()
-                element_info = []
-                for elem in all_elements[:8]:  # Apenas primeiros 8 elementos
-                    try:
-                        tag_name = await elem.evaluate('el => el.tagName')
-                        class_attr = await elem.get_attribute('class') or ''
-                        text_content = await elem.text_content()
-                        if text_content and len(text_content.strip()) > 2:
-                            element_info.append(f"{tag_name}.{class_attr[:15]}='{text_content.strip()[:25]}'")
-                    except:
-                        continue
+                # Tentar buscar elementos específicos dentro do container
+                try:
+                    # Procurar por spans com texto dos times
+                    spans = await match_container.locator('span').all()
+                    span_texts = []
+                    for span in spans:
+                        text = await span.text_content()
+                        if text and len(text.strip()) > 2:
+                            span_texts.append(text.strip())
+                    
+                    if len(span_texts) >= 2:
+                        print(f"🔍 [DEBUG] Textos encontrados nos spans: {span_texts[:5]}")
+                        
+                        # Tentar identificar times nos textos
+                        potential_teams = []
+                        for text in span_texts:
+                            if not any(char.isdigit() for char in text) and len(text) > 2:
+                                potential_teams.append(text)
+                        
+                        if len(potential_teams) >= 2:
+                            match_details.update({
+                                "home_team": potential_teams[0],
+                                "away_team": potential_teams[1],
+                                "home_score": "0",
+                                "away_score": "0",
+                                "match_status": "not_started"
+                            })
+                            print(f"📋 HTML_EXTRACT: {potential_teams[0]} vs {potential_teams[1]}")
+                            return match_details
                 
-                if element_info:
-                    print(f"🔍 [DEBUG] Elementos: {element_info[:3]}")
+                except Exception as html_error:
+                    print(f"⚠️ [DEBUG] Erro na extração HTML: {html_error}")
             
             return match_details
             
@@ -1098,13 +1118,35 @@ class SofaScoreLinksService:
             return match_details
     
     def _split_team_names(self, teams_str):
-        """Separa nomes de times de uma string compacta usando heurísticas melhoradas"""
+        """Separa nomes de times de uma string compacta usando heurísticas melhoradas - VERSÃO DEPLOY"""
         try:
             # Remover espaços extras
             teams_str = teams_str.strip()
             print(f"🔍 [SPLIT] Tentando separar: '{teams_str}'")
             
-            # Estratégia 1: Procurar por maiúsculas consecutivas no meio da string
+            # ESTRATÉGIA 0: Casos já separados por espaços, hífen ou vs
+            if ' vs ' in teams_str.lower():
+                parts = teams_str.lower().split(' vs ')
+                if len(parts) == 2:
+                    result = [parts[0].strip().title(), parts[1].strip().title()]
+                    print(f"✅ [SPLIT] Estratégia 0 (vs): '{result[0]}' vs '{result[1]}'")
+                    return result
+            
+            if ' - ' in teams_str:
+                parts = teams_str.split(' - ')
+                if len(parts) == 2:
+                    result = [parts[0].strip(), parts[1].strip()]
+                    print(f"✅ [SPLIT] Estratégia 0 (hífen): '{result[0]}' vs '{result[1]}'")
+                    return result
+            
+            if ' x ' in teams_str.lower():
+                parts = teams_str.lower().split(' x ')
+                if len(parts) == 2:
+                    result = [parts[0].strip().title(), parts[1].strip().title()]
+                    print(f"✅ [SPLIT] Estratégia 0 (x): '{result[0]}' vs '{result[1]}'")
+                    return result
+            
+            # ESTRATÉGIA 1: Procurar por maiúsculas consecutivas no meio da string
             # Exemplo: "Volta RedondaAvaí" -> "Volta Redonda" + "Avaí"
             for i in range(1, len(teams_str) - 1):
                 if teams_str[i].isupper() and teams_str[i-1].islower():
@@ -1117,9 +1159,51 @@ class SofaScoreLinksService:
                         print(f"✅ [SPLIT] Estratégia 1 funcionou: '{potential_team1}' vs '{potential_team2}'")
                         return [potential_team1, potential_team2]
             
-            # Estratégia 2: Casos específicos conhecidos do SofaScore
+            # ESTRATÉGIA 2: Casos específicos conhecidos do SofaScore (EXPANDIDO)
             specific_cases = {
+                # Casos brasileiros
                 'VoltaRedondaAvaí': ['Volta Redonda', 'Avaí'],
+                'PaysanduBotafogo': ['Paysandu', 'Botafogo'],
+                'PaysanduBotafogoSP': ['Paysandu', 'Botafogo-SP'],
+                'FluminenseBotafogo': ['Fluminense', 'Botafogo'],
+                'FlamengoVasco': ['Flamengo', 'Vasco'],
+                'CorintiansFlamengo': ['Corinthians', 'Flamengo'],
+                'PalmeirasFlamengo': ['Palmeiras', 'Flamengo'],
+                'SantosSãoPaulo': ['Santos', 'São Paulo'],
+                'SãoPauloCorinthians': ['São Paulo', 'Corinthians'],
+                'GrêmioInternacional': ['Grêmio', 'Internacional'],
+                'AtléticoMGCruzeiro': ['Atlético-MG', 'Cruzeiro'],
+                'BahiaVitória': ['Bahia', 'Vitória'],
+                'FortalezaCeará': ['Fortaleza', 'Ceará'],
+                'SportNáutico': ['Sport', 'Náutico'],
+                'CriciúmaAvaí': ['Criciúma', 'Avaí'],
+                'ChapecoenseCriciúma': ['Chapecoense', 'Criciúma'],
+                'GoiásVilaNova': ['Goiás', 'Vila Nova'],
+                'CuiabáAméricaMG': ['Cuiabá', 'América-MG'],
+                'BragantinoPalmeiras': ['Bragantino', 'Palmeiras'],
+                'AtléticoGOGoiânia': ['Atlético-GO', 'Goiânia'],
+                'JuventudeGrêmio': ['Juventude', 'Grêmio'],
+                'OperárioLondrina': ['Operário', 'Londrina'],
+                'TombenseVila': ['Tombense', 'Vila'],
+                'CSANáutico': ['CSA', 'Náutico'],
+                'SampaioVitória': ['Sampaio', 'Vitória'],
+                'BotafogoSPPonte': ['Botafogo-SP', 'Ponte'],
+                'GuaraniPonte': ['Guarani', 'Ponte'],
+                'CRBNáutico': ['CRB', 'Náutico'],
+                'VitóriaBahia': ['Vitória', 'Bahia'],
+                'CearáFortaleza': ['Ceará', 'Fortaleza'],
+                'NáuticoSport': ['Náutico', 'Sport'],
+                'AvaíFigueirense': ['Avaí', 'Figueirense'],
+                'CriciúmaChapecoense': ['Criciúma', 'Chapecoense'],
+                'VilaNovaCrac': ['Vila Nova', 'Crac'],
+                'AméricaMGCruzeiro': ['América-MG', 'Cruzeiro'],
+                'PalmeirasCorinthians': ['Palmeiras', 'Corinthians'],
+                'SantosFlamengo': ['Santos', 'Flamengo'],
+                'VascoFluminense': ['Vasco', 'Fluminense'],
+                'InternacionalGrêmio': ['Internacional', 'Grêmio'],
+                'CruzeiroAtléticoMG': ['Cruzeiro', 'Atlético-MG'],
+                
+                # Casos internacionais
                 'RiverPlateUrawaReds': ['River Plate', 'Urawa Reds'],
                 'MonterreyInter': ['Monterrey', 'Inter'],
                 'FluminenseDortmund': ['Fluminense', 'Dortmund'],
@@ -1140,7 +1224,65 @@ class SofaScoreLinksService:
                 'WestChesterUnitedLehighValleyUnited': ['West Chester United', 'Lehigh Valley United'],
                 'MarinFCAllianceOaklandSoul': ['Marin FC Alliance', 'Oakland Soul'],
                 'BeijingQingdao': ['Beijing', 'Qingdao'],
-                'ColoColoCobresal': ['Colo Colo', 'Cobresal']
+                'ColoColoCobresal': ['Colo Colo', 'Cobresal'],
+                'BarcelonaRealMadrid': ['Barcelona', 'Real Madrid'],
+                'RealMadridAtléticoMadrid': ['Real Madrid', 'Atlético Madrid'],
+                'ManchesterUnitedManchesterCity': ['Manchester United', 'Manchester City'],
+                'ChelseaArsenal': ['Chelsea', 'Arsenal'],
+                'LiverpoolTottenham': ['Liverpool', 'Tottenham'],
+                'BayernMunichBorussiaDortmund': ['Bayern Munich', 'Borussia Dortmund'],
+                'JuventusMilan': ['Juventus', 'Milan'],
+                'InterMilan': ['Inter', 'Milan'],
+                'PSGMarseille': ['PSG', 'Marseille'],
+                'AjaxPSV': ['Ajax', 'PSV'],
+                'PortoSporting': ['Porto', 'Sporting'],
+                'BenficaPorto': ['Benfica', 'Porto'],
+                'CelticRangers': ['Celtic', 'Rangers'],
+                'FenerbahçeGalatasaray': ['Fenerbahçe', 'Galatasaray'],
+                'OlympiacosPanathinaikos': ['Olympiacos', 'Panathinaikos'],
+                'SpartakDynamo': ['Spartak', 'Dynamo'],
+                'ZenitCSKA': ['Zenit', 'CSKA'],
+                'RiverBoca': ['River', 'Boca'],
+                'SanLorenzoRacing': ['San Lorenzo', 'Racing'],
+                'FlamengoSantos': ['Flamengo', 'Santos'],
+                'BocaRiver': ['Boca', 'River'],
+                'RacingIndependiente': ['Racing', 'Independiente'],
+                'EstudiantesGimnasia': ['Estudiantes', 'Gimnasia'],
+                'TigreBanfield': ['Tigre', 'Banfield'],
+                'LanúsArsenal': ['Lanús', 'Arsenal'],
+                'VélezHuracán': ['Vélez', 'Huracán'],
+                'NewellsRosario': ['Newell\'s', 'Rosario'],
+                'TalleresGodoy': ['Talleres', 'Godoy'],
+                'UnionColón': ['Union', 'Colón'],
+                'AldosiviPlatense': ['Aldosivi', 'Platense'],
+                'BarracasCentral': ['Barracas', 'Central'],
+                'DefensaJusticia': ['Defensa', 'Justicia'],
+                'PatronatoSarmiento': ['Patronato', 'Sarmiento'],
+                'ArsenalSarmiento': ['Arsenal', 'Sarmiento'],
+                'CentralCórdoba': ['Central', 'Córdoba'],
+                'GimnasiaRiestra': ['Gimnasia', 'Riestra'],
+                'IndependienteRivadavia': ['Independiente', 'Rivadavia'],
+                'InstitutoDeportivo': ['Instituto', 'Deportivo'],
+                'RivaraviaGodoy': ['Rivaravia', 'Godoy'],
+                'TigreBelgrano': ['Tigre', 'Belgrano'],
+                'BanfieldSan': ['Banfield', 'San'],
+                'HuracánPlatense': ['Huracán', 'Platense'],
+                'RosarioCentral': ['Rosario', 'Central'],
+                'GodoyTalleres': ['Godoy', 'Talleres'],
+                'ColónUnión': ['Colón', 'Unión'],
+                'PlatenseAldosivi': ['Platense', 'Aldosivi'],
+                'CentralBarracas': ['Central', 'Barracas'],
+                'JusticiaDefensa': ['Justicia', 'Defensa'],
+                'SarmientoPatronato': ['Sarmiento', 'Patronato'],
+                'SarmientoArsenal': ['Sarmiento', 'Arsenal'],
+                'CórdobaCentral': ['Córdoba', 'Central'],
+                'RiestraGimnasia': ['Riestra', 'Gimnasia'],
+                'RivadaviaIndependiente': ['Rivadavia', 'Independiente'],
+                'DeportivoInstituto': ['Deportivo', 'Instituto'],
+                'GodoyRivaravia': ['Godoy', 'Rivaravia'],
+                'BelgranoTigre': ['Belgrano', 'Tigre'],
+                'SanBanfield': ['San', 'Banfield'],
+                'PlatenseHuracán': ['Platense', 'Huracán']
             }
             
             # Remover espaços para comparação
@@ -1150,9 +1292,23 @@ class SofaScoreLinksService:
                 print(f"✅ [SPLIT] Caso específico encontrado: '{result[0]}' vs '{result[1]}'")
                 return result
             
-            # Estratégia 3: Procurar por padrões conhecidos de times
+            # ESTRATÉGIA 3: Procurar por padrões conhecidos de times (EXPANDIDO)
             # Lista de palavras que geralmente terminam nomes de times
-            team_endings = ['FC', 'SC', 'AC', 'United', 'City', 'Town', 'Reds', 'Blues', 'Rovers', 'Wanderers', 'Steelers', 'Plate']
+            team_endings = [
+                'FC', 'SC', 'AC', 'EC', 'CF', 'CD', 'CD', 'RC', 'TC', 'UC', 'MC', 'BC', 'DC', 'GC',
+                'United', 'City', 'Town', 'County', 'Rovers', 'Wanderers', 'Athletic', 'Atletico',
+                'Reds', 'Blues', 'Whites', 'Greens', 'Yellows', 'Blacks', 'Lions', 'Eagles', 'Tigers',
+                'Steelers', 'Warriors', 'Knights', 'Rangers', 'Gunners', 'Hammers', 'Spurs', 'Saints',
+                'Plate', 'Madrid', 'Barcelona', 'Milan', 'Inter', 'Juventus', 'Bayern', 'Borussia',
+                'Real', 'Atlético', 'Athletic', 'Deportivo', 'Sporting', 'Nacional', 'Internacional',
+                'Flamengo', 'Corinthians', 'Palmeiras', 'Santos', 'Vasco', 'Botafogo', 'Fluminense',
+                'Grêmio', 'Cruzeiro', 'Atlético', 'Bahia', 'Vitória', 'Fortaleza', 'Ceará', 'Sport',
+                'Náutico', 'Avaí', 'Criciúma', 'Chapecoense', 'Goiás', 'Vila', 'Cuiabá', 'América',
+                'Bragantino', 'Juventude', 'Operário', 'Londrina', 'Tombense', 'CSA', 'Sampaio',
+                'Guarani', 'Ponte', 'CRB', 'Figueirense', 'Crac', 'SP', 'RJ', 'MG', 'RS', 'PR',
+                'BA', 'PE', 'CE', 'GO', 'DF', 'AC', 'AL', 'AP', 'AM', 'ES', 'MA', 'MT', 'MS',
+                'PA', 'PB', 'PI', 'RN', 'RO', 'RR', 'SE', 'TO'
+            ]
             
             for ending in team_endings:
                 if ending in teams_str:
@@ -1164,7 +1320,7 @@ class SofaScoreLinksService:
                             print(f"✅ [SPLIT] Estratégia 3 (ending '{ending}'): '{team1}' vs '{team2}'")
                             return [team1, team2]
             
-            # Estratégia 4: Procurar por sequências de maiúsculas no meio
+            # ESTRATÉGIA 4: Procurar por sequências de maiúsculas no meio
             # Exemplo: "MonterreyInter" -> "Monterrey" + "Inter"
             uppercase_positions = [i for i, c in enumerate(teams_str) if c.isupper()]
             if len(uppercase_positions) >= 2:
@@ -1177,13 +1333,27 @@ class SofaScoreLinksService:
                         print(f"✅ [SPLIT] Estratégia 4 (maiúsculas): '{team1}' vs '{team2}'")
                         return [team1, team2]
             
-            # Estratégia 5: Dividir por palavras e tentar agrupar
+            # ESTRATÉGIA 5: Dividir por palavras e tentar agrupar
             words = teams_str.split()
             if len(words) >= 2:
                 # Para 2 palavras, assumir 1 palavra por time
                 if len(words) == 2:
                     print(f"✅ [SPLIT] Estratégia 5 (2 palavras): '{words[0]}' vs '{words[1]}'")
                     return words
+                
+                # Para 3 palavras, tentar 2+1 ou 1+2
+                if len(words) == 3:
+                    # Verificar se a segunda palavra é um sufixo comum
+                    if words[1].upper() in ['FC', 'SC', 'AC', 'EC', 'CF', 'CD', 'RC', 'TC', 'UC', 'MC', 'BC', 'DC', 'GC']:
+                        team1 = f"{words[0]} {words[1]}"
+                        team2 = words[2]
+                        print(f"✅ [SPLIT] Estratégia 5 (3 palavras 2+1): '{team1}' vs '{team2}'")
+                        return [team1, team2]
+                    elif words[2].upper() in ['FC', 'SC', 'AC', 'EC', 'CF', 'CD', 'RC', 'TC', 'UC', 'MC', 'BC', 'DC', 'GC']:
+                        team1 = words[0]
+                        team2 = f"{words[1]} {words[2]}"
+                        print(f"✅ [SPLIT] Estratégia 5 (3 palavras 1+2): '{team1}' vs '{team2}'")
+                        return [team1, team2]
                 
                 # Para mais palavras, tentar dividir no meio
                 mid = len(words) // 2
@@ -1194,10 +1364,10 @@ class SofaScoreLinksService:
                     print(f"✅ [SPLIT] Estratégia 5 (divisão meio): '{team1}' vs '{team2}'")
                     return [team1, team2]
             
-            # Estratégia 6: Tentar dividir por números ou caracteres especiais
+            # ESTRATÉGIA 6: Tentar dividir por números ou caracteres especiais
             # Exemplo: "Team1U21Team2U19" -> procurar por padrões
             import re
-            patterns = [r'U\d+', r'\d+', r'Jr', r'Sr']
+            patterns = [r'U\d+', r'\d+', r'Jr', r'Sr', r'II', r'III', r'IV']
             for pattern in patterns:
                 matches = list(re.finditer(pattern, teams_str))
                 if len(matches) >= 1:
@@ -1209,6 +1379,51 @@ class SofaScoreLinksService:
                         if len(team1) >= 3 and len(team2) >= 3:
                             print(f"✅ [SPLIT] Estratégia 6 (padrão '{pattern}'): '{team1}' vs '{team2}'")
                             return [team1, team2]
+            
+            # ESTRATÉGIA 7: Tentar dividir baseado em palavras conhecidas de times
+            common_team_words = [
+                'Real', 'Club', 'Deportivo', 'Atlético', 'Athletic', 'Sporting', 'Nacional', 'Internacional',
+                'United', 'City', 'Town', 'County', 'Rovers', 'Wanderers', 'Rangers', 'Celtic',
+                'Flamengo', 'Corinthians', 'Palmeiras', 'Santos', 'Vasco', 'Botafogo', 'Fluminense',
+                'Grêmio', 'Cruzeiro', 'Bahia', 'Vitória', 'Fortaleza', 'Ceará', 'Sport', 'Náutico'
+            ]
+            
+            for word in common_team_words:
+                if word in teams_str:
+                    word_pos = teams_str.find(word)
+                    if word_pos > 0:
+                        # Tentar dividir antes da palavra
+                        team1 = teams_str[:word_pos].strip()
+                        team2 = teams_str[word_pos:].strip()
+                        if len(team1) >= 3 and len(team2) >= 3:
+                            print(f"✅ [SPLIT] Estratégia 7 (palavra '{word}' antes): '{team1}' vs '{team2}'")
+                            return [team1, team2]
+                    
+                    word_end = word_pos + len(word)
+                    if word_end < len(teams_str) - 2:
+                        # Tentar dividir depois da palavra
+                        team1 = teams_str[:word_end].strip()
+                        team2 = teams_str[word_end:].strip()
+                        if len(team1) >= 3 and len(team2) >= 3:
+                            print(f"✅ [SPLIT] Estratégia 7 (palavra '{word}' depois): '{team1}' vs '{team2}'")
+                            return [team1, team2]
+            
+            # ESTRATÉGIA 8: Dividir por consonantes seguidas de vogais (heurística)
+            vowels = 'aeiouAEIOU'
+            consonants = 'bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZ'
+            
+            for i in range(2, len(teams_str) - 2):
+                if (teams_str[i] in consonants and 
+                    teams_str[i+1] in vowels and 
+                    teams_str[i-1] in vowels and
+                    teams_str[i-2] in consonants):
+                    
+                    team1 = teams_str[:i].strip()
+                    team2 = teams_str[i:].strip()
+                    
+                    if len(team1) >= 3 and len(team2) >= 3:
+                        print(f"✅ [SPLIT] Estratégia 8 (padrão CV): '{team1}' vs '{team2}'")
+                        return [team1, team2]
             
             # Se nada funcionou, retornar None
             print(f"❌ [SPLIT] Não foi possível separar: '{teams_str}'")
