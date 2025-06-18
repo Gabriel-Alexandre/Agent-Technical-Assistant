@@ -11,10 +11,24 @@ services:
     env_file:
       - .env
     ports:
-      - "3000:3000"
+      - "3001:3000"
     restart: unless-stopped
     networks:
       - coolify
+    labels:
+      - traefik.enable=true
+
+      # Dominio da aplicação (ajuste aqui seu domínio)
+      - traefik.http.routers.web-app.rule=Host(`assitantweb.gaxpreview.site`)
+      - traefik.http.routers.web-app.entrypoints=http,https
+      - traefik.http.routers.web-app.tls=true
+      - traefik.http.routers.web-app.tls.certresolver=letsencrypt
+
+      # Serviço que será exposto
+      - traefik.http.services.web-app.loadbalancer.server.port=3000
+
+      # Healthcheck opcional
+      - traefik.http.routers.web-app.service=web-app
 
 networks:
   coolify:
